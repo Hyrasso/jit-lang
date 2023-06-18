@@ -1,0 +1,34 @@
+
+start: module
+
+module: (statement NEW_LINE+)* statement NEW_LINE*
+
+statement: expression
+
+expression: prec_1
+
+?prec_1: prec_2 (prec_1_op prec_2)*
+?prec_2: base (prec_2_op base)*
+?base: DECIMAL_NUMBER                -> number
+       | "(" expression ")"
+
+?prec_2_op: ASTERISK | SLASH
+?prec_1_op: PLUS | MINUS
+
+ASTERISK: "*"
+SLASH: "/"
+PLUS: "+"
+MINUS: "-"
+
+DIGIT: "0".."9"
+DECIMAL_NUMBER: DIGIT+
+
+IGNORED_SPACES: " " | /\t/
+%ignore IGNORED_SPACES
+
+CR : /\r/
+LF : /\n/
+NEW_LINE: (CR? LF)+
+
+COMMENT: /#.*/
+%ignore COMMENT
