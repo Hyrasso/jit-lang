@@ -1,0 +1,8 @@
+a_named_block:
+    2*3
+2 * 5
+
+another_block:
+    3 * 5
+    nested_block:
+        6 * 7

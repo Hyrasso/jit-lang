@@ -1,14 +1,31 @@
 
 start: module
 
-module: (statement NEW_LINE+)* statement NEW_LINE*
+module: block
 
-statement: expression
+block: statement+
+
+statement: expression _NEW_LINE+
            | assignment 
+           | named_block
 
-assignment: IDENT "=" expression
+named_block: IDENT ":" _NEW_LINE _INDENT block _DEDENT
+
+assignment: IDENT "=" expression _NEW_LINE
+            | IDENT "=" func_declare
 
 expression: prec_1
+            | inline_func_declare
+            | func_call
+
+_list{x, sep} : x (sep x)*
+
+inline_func_declare: "fn" "(" _list{IDENT, ","}?  ")" ":" expression
+
+func_declare : "fn" "(" _list{IDENT, ","}  ")" ":" _NEW_LINE _INDENT block _DEDENT
+
+func_call: IDENT "(" _list{expression, ","}? ")"
+
 
 ?prec_1: prec_2 (prec_1_op prec_2)*
 ?prec_2: base (prec_2_op base)*
@@ -35,7 +52,11 @@ IGNORED_SPACES: " " | /\t/
 
 CR : /\r/
 LF : /\n/
-NEW_LINE: (CR? LF)+
+// LINE_INDENT is part of _NEW_LINE to add _INDENT/_DEDENT token with post lexing
+LINE_INDENT: /[\t ]*/
+_NEW_LINE: (CR? LF LINE_INDENT?)+
 
-COMMENT: /#.*/
+COMMENT: /#[^\n]*/
 %ignore COMMENT
+
+%declare _INDENT _DEDENT

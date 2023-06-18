@@ -1,7 +1,9 @@
 from abc import ABC
+from dataclasses import dataclass
 from typing import Tuple
 
 import lark
+from lark.indenter import Indenter
 
 class ASTNode(ABC):
     __match_args__ = ("value",)
@@ -14,7 +16,7 @@ class ASTNode(ABC):
     
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
-        return f"{cls_name}({self.value if self.value is not None else ''})"
+        return f"{cls_name}({repr(self.value) if self.value is not None else ''})"
 
 # Terminals
 class ASTNumber(ASTNode):
@@ -46,15 +48,21 @@ class ASTBinaryOp(ASTNode):
     
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
-        return f"{cls_name}({self.a}, {self.op}, {self.b})"
+        return f"{cls_name}({self.a!r}, {self.op!r}, {self.b!r})"
 
     @classmethod
     def from_tree(cls, children):
-        a, op, b = children
-        return cls(a, ASTOp(str(op)), b)
+        assert len(children) > 2 and len(children) % 2 == 1, len(children)
+        a, op, b, *rest = children
+        res = cls(a, ASTOp(str(op)), b)
+        while rest:
+            op, b, *rest = rest
+            res = ASTBinaryOp(res, ASTOp(str(op)), b)
+        return res
 
 class ASTExpression(ASTNullary):...
 class ASTStatement(ASTNullary):...
+
 
 class ASTAssignment(ASTNode):
     @classmethod
@@ -62,13 +70,52 @@ class ASTAssignment(ASTNode):
         lvalue,  rvalue = children
         return cls((ASTIdentifier(str(lvalue)), rvalue))
 
-class ASTModule(ASTNode):
+class ASTModule(ASTNullary):...
+
+class ASTBlock(ASTNode):
     value: Tuple[ASTStatement]
     @classmethod
     def from_tree(cls, children):
+        assert all(isinstance(st, ASTStatement) for st in children)
         statements = [statement for statement in children if isinstance(statement, ASTStatement)]
         return cls(tuple(statements))
-    
+
+class ASTNamedBlock(ASTNode):
+    __match_args__ = ("name", "block")
+    def __init__(self, name, block) -> None:
+        self.name = name
+        self.block = block
+    @classmethod
+    def from_tree(cls, children):
+        name, block = children
+        return cls(str(name), block)
+    def __repr__(self) -> str:
+        cls_name = self.__class__.__name__
+        return f"{cls_name}({self.name!r}, {self.block!r})"
+
+@dataclass
+class ASTFunctionDeclare(ASTNode):
+    arguments: Tuple[str]
+    body: ASTBlock
+    @classmethod
+    def from_tree(cls, children):
+        *args, body = children
+        return cls(tuple(map(str, args)), body)
+
+class ASTInlineFunctionDeclare(ASTFunctionDeclare):
+    @classmethod
+    def from_tree(cls, children):
+        *args, expression = children
+        return super().from_tree([*args, ASTBlock((ASTStatement(expression),))])
+
+@dataclass
+class ASTFunctionCall(ASTNode):
+    func_name: str
+    arguments: Tuple[ASTExpression]
+    @classmethod
+    def from_tree(cls, children):
+        func_name, *args = children
+        return cls(str(func_name), tuple(args))
 
 class ASTBuilder(lark.Transformer):
     def __init__(self, visit_tokens: bool = True) -> None:
@@ -85,6 +132,11 @@ class ASTBuilder(lark.Transformer):
         }
 
     module = ASTModule.from_tree
+    block = ASTBlock.from_tree
+    named_block = ASTNamedBlock.from_tree
+    func_declare = ASTFunctionDeclare.from_tree
+    inline_func_declare = ASTInlineFunctionDeclare.from_tree
+    func_call = ASTFunctionCall.from_tree
     statement = ASTStatement.from_tree
     assignment = ASTAssignment.from_tree
     expression = ASTExpression.from_tree
@@ -92,3 +144,24 @@ class ASTBuilder(lark.Transformer):
     number = ASTNumber.from_tree
     prec_1 = ASTBinaryOp.from_tree
     prec_2 = ASTBinaryOp.from_tree
+
+
+class BlockIndenter(Indenter):
+    @property
+    def NL_type(self):
+        return "_NEW_LINE"
+    @property
+    def OPEN_PAREN_types(self):
+        return []
+    @property
+    def CLOSE_PAREN_types(self):
+        return  []
+    @property
+    def INDENT_type(self):
+        return  "_INDENT"
+    @property
+    def DEDENT_type(self):
+        return  "_DEDENT"
+    @property
+    def tab_len(self):
+        return 8

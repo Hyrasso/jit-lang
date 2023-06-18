@@ -3,7 +3,7 @@ from pathlib import Path
 
 import lark
 
-from ast_definition import ASTBuilder
+from ast_definition import ASTBuilder, BlockIndenter
 
 
 def initialize_parser(grammar_file=Path):
@@ -14,7 +14,8 @@ def initialize_parser(grammar_file=Path):
         parser="lalr",
         start="module",
         lexer_callbacks=ast_builder.lexer_callbacks(),
-        transformer=ast_builder
+        transformer=ast_builder,
+        postlex=BlockIndenter()
         )
 
     return parser, ast_builder

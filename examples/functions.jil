@@ -1,0 +1,12 @@
+fn ( y ) : 3 * 2
+
+f1 = fn(x):x+1
+
+f2 = fn (a, b):
+    inner_f = fn(x):
+        a + x
+    (f1(a)) + b * 2 - (inner_f(0))
+
+print(f1(3))
+
+print(f2(7, 4))
