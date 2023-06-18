@@ -4,12 +4,16 @@ start: module
 module: (statement NEW_LINE+)* statement NEW_LINE*
 
 statement: expression
+           | assignment 
+
+assignment: IDENT "=" expression
 
 expression: prec_1
 
 ?prec_1: prec_2 (prec_1_op prec_2)*
 ?prec_2: base (prec_2_op base)*
 ?base: DECIMAL_NUMBER                -> number
+       | IDENT                       -> identifier
        | "(" expression ")"
 
 ?prec_2_op: ASTERISK | SLASH
@@ -19,6 +23,9 @@ ASTERISK: "*"
 SLASH: "/"
 PLUS: "+"
 MINUS: "-"
+
+// Any char that is not a white space and that is 
+IDENT: /[^\W\d]\w*/u
 
 DIGIT: "0".."9"
 DECIMAL_NUMBER: DIGIT+

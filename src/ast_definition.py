@@ -24,6 +24,11 @@ class ASTNumber(ASTNode):
         return cls(int(val))
 
 class ASTOp(ASTNode):...
+class ASTIdentifier(ASTNode):
+    @classmethod
+    def from_tree(cls, children):
+        val, = children
+        return cls(str(val))
 
 # rules
 class ASTNullary(ASTNode):
@@ -51,6 +56,12 @@ class ASTBinaryOp(ASTNode):
 class ASTExpression(ASTNullary):...
 class ASTStatement(ASTNullary):...
 
+class ASTAssignment(ASTNode):
+    @classmethod
+    def from_tree(cls, children):
+        lvalue,  rvalue = children
+        return cls((ASTIdentifier(str(lvalue)), rvalue))
+
 class ASTModule(ASTNode):
     value: Tuple[ASTStatement]
     @classmethod
@@ -75,7 +86,9 @@ class ASTBuilder(lark.Transformer):
 
     module = ASTModule.from_tree
     statement = ASTStatement.from_tree
+    assignment = ASTAssignment.from_tree
     expression = ASTExpression.from_tree
+    identifier = ASTIdentifier.from_tree
     number = ASTNumber.from_tree
     prec_1 = ASTBinaryOp.from_tree
     prec_2 = ASTBinaryOp.from_tree

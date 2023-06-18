@@ -30,6 +30,11 @@ class Environment:
             return self.parent.get(val)
         
         raise RuntimeError(f"Unknown {val} in env")
+    
+    # systematicaly shadow parent env
+    def set(self, var, val):
+        self._env[var] = val
+
 
 BUILTIN_FUNCTIONS = {
     "/": lambda a, b: Number(a.value / b.value),
@@ -57,6 +62,10 @@ def interpret_statement(node: ASTStatement, env: Environment):
     match node.value:
         case ASTExpression(value):
             return interpret_expression(value, env)
+        case ASTAssignment((lvalue, rvalue)):
+            rvalue = interpret_expression(rvalue, env)
+            env.set(lvalue.value, rvalue)
+            return
         case v:
             raise NotImplementedError(f"Interpret statement not implemented for {v}")
 
@@ -65,6 +74,10 @@ def interpret_expression(node: ASTExpression | ASTNumber | ASTBinaryOp, env: Env
     match node:
         case ASTNumber(val):
             return Number(val)
+        case ASTIdentifier(ident):
+            return env.get(ident)
+        case Ident(ident):
+            return env.get(ident)
         case ASTBinaryOp(a, op, b):
             val_a = interpret_expression(a, env)
             val_b = interpret_expression(b, env)
