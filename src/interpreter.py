@@ -1,3 +1,4 @@
+import time
 from typing import Callable
 from ast_definition import *
 
@@ -7,6 +8,8 @@ from compile import JITEngine, JITValuError
 from utils import Environment
 
 logger = logging.getLogger(__name__)
+logger.addHandler(logging.StreamHandler())
+logger.setLevel(logging.INFO)
 
 JIT_COMPILE = True
 SHADOW_JIT = True
@@ -101,7 +104,10 @@ def interpret_func_call(func: Callable | ASTFunctionDeclare, arguments, env: Env
 
     if JIT_COMPILE and func.jit_function_call is None:
         try:
+            t = time.perf_counter_ns()
             JIT_ENGINE.compile_function(func, env)
+            dt = time.perf_counter_ns() - t
+            logger.info("Compiled func in %d ns", dt)
         except NotImplementedError as err:
             if DEBUG:
                 raise err
@@ -111,9 +117,15 @@ def interpret_func_call(func: Callable | ASTFunctionDeclare, arguments, env: Env
     if func.jit_function_call is not None:
         if SHADOW_JIT:
             new_env = Environment(parent=env, env=dict(zip(func.arguments, arguments)))
+            t = time.perf_counter_ns()
             interp_res = interpret_block(func.body, new_env)
+            dt = time.perf_counter_ns() - t
+            logger.info("Intepreted func in %d ns", dt)
             try:
+                t = time.perf_counter_ns()
                 jit_res = func.jit_function_call(*arguments)
+                dt = time.perf_counter_ns() - t
+                logger.info("Run jitted func in %d ns", dt)
                 if interp_res != jit_res:
                     print(f"Jit and interp got different results: jit({jit_res}), interp({interp_res})")
                 return jit_res

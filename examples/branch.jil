@@ -19,8 +19,24 @@ gt = fn(a, b):
 if gt(2, 3):
     print(111)
 
-t = fn(n):
-    if n != 1234:
-        print(4321)
+f = fn(n):
+    r = 0
+    unused = 1
+    a = 0
+    if r == 1:
+        r = 1
+    else:
+        r = 0
+    if a == 1:
+        a = 1
+    if a == 2:
+        a = 2
+    if a == 3:
+        a = 3
+    if a == 4:
+        a = 4
+    r
 
-t(0)
+print(f(0))
+print(f(1))
+print(f(2))

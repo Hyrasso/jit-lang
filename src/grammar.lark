@@ -24,7 +24,7 @@ _list{x, sep} : x (sep x)*
 
 inline_func_declare: "fn" "(" _list{IDENT, ","}?  ")" ":" expression
 
-func_declare : "fn" "(" _list{IDENT, ","}  ")" ":" _NEW_LINE _INDENT block _DEDENT
+func_declare : "fn" "(" _list{IDENT, ","}?  ")" ":" _NEW_LINE _INDENT block _DEDENT
 
 func_call: IDENT "(" _list{expression, ","}? ")"
 

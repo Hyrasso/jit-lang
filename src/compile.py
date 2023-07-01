@@ -1,5 +1,6 @@
 from typing import Any
 from ast_definition import *
+from collections import Counter
 import ctypes
 from ctypes import CDLL
 from enum import Enum
@@ -9,6 +10,7 @@ from textwrap import indent
 
 from utils import Environment
 from ast_definition import ASTFunctionDeclare
+from jit_builtins import BUILTIN_FUNC_ASM
 
 class JITValuError(ValueError):...
 
@@ -33,43 +35,6 @@ def systemv_call_order(sizes):
         assert size <= 8
         yield StackOffset(idx * 8)
 
-
-BINARY_OP_FUNC_PATTERN = """
-{label}:
-    # enter
-    pushq %rbp
-    movq %rsp, %rbp
-
-    movq %rdi, %rax
-    {op} %rsi, %rax
-
-    # leave
-    movq %rbp, %rsp
-    popq %rbp
-    retq
-"""
-
-FACTOR_FUNC_PATTERN = """
-{label}:
-    # enter
-    pushq %rbp
-    movq %rsp, %rbp
-
-    xorq %rdx, %rdx # for division as it uses rdx:rax as input
-    movq %rdi, %rax
-    {op} %rsi
-
-    # leave
-    movq %rbp, %rsp
-    popq %rbp
-    retq
-"""
-
-ADD_FUNC = BINARY_OP_FUNC_PATTERN.format(label="add", op="addq")
-SUB_FUNC = BINARY_OP_FUNC_PATTERN.format(label="sub", op="subq")
-
-MUL_FUNC = FACTOR_FUNC_PATTERN.format(label="mul", op="mulq")
-DIV_FUNC = FACTOR_FUNC_PATTERN.format(label="div", op="divq")
 
 def to_c_type(arg):
     match arg:
@@ -102,12 +67,7 @@ class JITEngine:
         self.compilation_dir = Path(compilation_dir)
         self.compilation_dir.mkdir(parents=True, exist_ok=True)
 
-        self._compiled_functions = [
-            ADD_FUNC,
-            SUB_FUNC,
-            MUL_FUNC,
-            DIV_FUNC,
-        ]
+        self._compiled_functions = [*BUILTIN_FUNC_ASM]
 
         self.jitted_lib: CDLL = CDLL(None)
 
@@ -180,7 +140,15 @@ def _format_comment(comment) -> str:
     return f" # {comment}"
 
 
+
+class Label:
+    def __init__(self, value) -> None:
+        self.value = value
+    def __str__(self) -> str:
+        return f"{self.value}"
+
 class CompilationContext:
+    _unique_block_index = Counter()
     def __init__(self, block_label, stack_size=0, export_func=False) -> None:
         self.block_label = block_label
         self.block = []
@@ -188,12 +156,18 @@ class CompilationContext:
         self.stack_size = stack_size # size allocated on the stack
     
     def __str__(self) -> str:
-        res = f"{self.block_label}:\n" + indent("\n".join(self.block), prefix="    ")
+        res = f"{self.block_label}:\n" + "\n".join([indent(b, prefix="    ") if isinstance(b, str) else str(b) for b in self.block])
         if self.export_func:
             res = f".global {self.block_label}\n.type {self.block_label}, @function\n{res}\n"
         return res
     
+    def include_block(self, ctx: "CompilationContext"):
+        self.block.append(ctx)
     
+    def get_unique_label(self, prefix):
+        self._unique_block_index[prefix] += 1
+        return f"{prefix}_{self._unique_block_index[prefix]}"
+
     def emit_move(self, source, destination, comment=None):
 
         if isinstance(source, StackOffset) and isinstance(destination, StackOffset): 
@@ -215,6 +189,15 @@ class CompilationContext:
     def emit_call(self, target):
         assert isinstance(target, str)
         self.block.append(f"callq {target}")
+
+    def emit_jump_target(self, target: Label):
+        # weird trick to go around auto indent
+        assert isinstance(target, Label)
+        self.block.append(Label(f"{target.value}:"))
+
+    def emit_jump(self, target: Label):
+        assert isinstance(target, Label)
+        self.block.append(f"jmp {target}")
     
     def emit_prelude(self):
         # TODO: caller/callee reg saved stuff
@@ -242,6 +225,13 @@ class CompilationContext:
         assert size % 8 == 0
         self.stack_size -= size
         self.block.append(f"addq ${size}, %rsp")
+    
+    def emit_if_branch(self, cond_true_label, cond_false_label):
+        self.block.extend([
+            "cmp $0, %rax",
+            f"jne {cond_true_label}",
+            f"jmp {cond_false_label}",
+        ])
 
 
 
@@ -277,32 +267,43 @@ def compile_statement(stmt, env, compilation_context):
             rvalue = compile_assignement(lvalue, rvalue, env, compilation_context)
         case ASTNamedBlock():
             raise NotImplementedError(f"Interpret statement not implemented for named blocks")
-        case ASTIfStatement():
-            # compile each block seperatly with its own label
-            # compile expression and test result
-            #   ...
-            #   <compile cond>
-            #   test %rax, %rax
-            #   jz if_branch
-            #   jmp else_branch
-            # if_branch:
-            #   ...
-            #   jmp end_if
-            # else_branch:
-            #   ...
-            #   jmp end_if
-            # else_branch:
-            #   ...
-            #   
-
-            # generate 'prelude' and 'epilogue'
-            raise NotImplementedError(f"Interpret statement not implemented for named blocks")
+        case ASTIfStatement() as if_stmt:
+            compile_if_statement(if_stmt, env, compilation_context)
+            # raise NotImplementedError(f"Interpret statement not implemented for if statement")
         case v:
             raise NotImplementedError(f"Interpret statement not implemented for {v}")
+
+def compile_if_statement(if_stmt: ASTIfStatement, env: Environment, compilation_context: CompilationContext):
+
+    compile_expression(if_stmt.cond, env, compilation_context)
+
+    cond_true_label = compilation_context.get_unique_label("if_cond_true")
+    cond_false_label = compilation_context.get_unique_label("if_cond_false")
+    end_if_label = Label(compilation_context.get_unique_label("end_if_label"))
+
+    compilation_context.emit_if_branch(cond_true_label, cond_false_label)
+
+    cond_true_block = CompilationContext(block_label=cond_true_label, stack_size=compilation_context.stack_size)
+    cond_true_env = Environment(parent=env)
+    compile_block(if_stmt.if_block, cond_true_env, cond_true_block)
+    cond_true_block.emit_jump(end_if_label)
+    compilation_context.include_block(cond_true_block)
+
+    cond_false_block = CompilationContext(block_label=cond_false_label, stack_size=compilation_context.stack_size)
+    if if_stmt.else_block is not None:
+        cond_false_env = Environment(parent=env)
+        compile_block(if_stmt.if_block, cond_false_env, cond_false_block)
+    cond_false_block.emit_jump(end_if_label)
+    compilation_context.include_block(cond_false_block)
+
+    compilation_context.emit_jump_target(end_if_label)
+
 
 def compile_expression(exp, env, compilation_context: CompilationContext):
     # kinda inline function call
     match exp:
+        case ASTExpression(exp):
+            return compile_expression(exp, env, compilation_context)
         case ASTNumber() as val:
             # move literal to rax
             compilation_context.emit_move(source=val, destination=Register.RAX)
@@ -324,6 +325,18 @@ def compile_expression(exp, env, compilation_context: CompilationContext):
                     compile_function_call("mul", (a, b), env, compilation_context)
                 case "/":
                     compile_function_call("div", (a, b), env, compilation_context)
+                case "<":
+                    compile_function_call("lt", (a, b), env, compilation_context)
+                case ">":
+                    compile_function_call("gt", (a, b), env, compilation_context)
+                case "<=":
+                    compile_function_call("lte", (a, b), env, compilation_context)
+                case ">=":
+                    compile_function_call("gte", (a, b), env, compilation_context)
+                case "==":
+                    compile_function_call("eq", (a, b), env, compilation_context)
+                case "!=":
+                    compile_function_call("neq", (a, b), env, compilation_context)
                 case o:
                     raise NotImplementedError(f"Operation compilation not implemented for {o}")
         case ASTFunctionDeclare(_):
@@ -331,6 +344,8 @@ def compile_expression(exp, env, compilation_context: CompilationContext):
         case ASTFunctionCall(func_name, arguments):
             func = env.get(func_name)
             compile_function_call(func, arguments, env, compilation_context)
+        case o:
+            raise NotImplementedError(f"Compilation of {type(o)} not implemented yet")
 
 def compile_assignement(lvalue, rvalue, env: Environment, compilation_context: CompilationContext):
     if not isinstance(lvalue, ASTIdentifier):
