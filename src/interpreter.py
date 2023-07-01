@@ -1,45 +1,28 @@
 from typing import Callable
 from ast_definition import *
 
-Ident = str
+import logging
 
-class Number:
-    def __init__(self, value) -> None:
-        self.value = int(value)
-    
-    def __str__(self):
-        return str(self.value)
+from compile import JITEngine, JITValuError
+from utils import Environment
 
-class Function:
-    def __init__(self, arguments, code) -> None:
-        self.arguments = arguments
-        assert isinstance(code, ASTBlock), type(code)
-        self.code = code
+logger = logging.getLogger(__name__)
 
-class Environment:
-    def __init__(self, parent=None, env=None) -> None:
-        self.parent = parent
-        self._env = env if env is not None else {}
-
-    def get(self, val):
-        if val in self._env:
-            return self._env[val]
-        
-        if self.parent is not None:
-            return self.parent.get(val)
-        
-        raise RuntimeError(f"Unknown {val} in env")
-    
-    # systematicaly shadow parent env
-    def set(self, var, val):
-        self._env[var] = val
-
+JIT_COMPILE = True
+SHADOW_JIT = True
+DEBUG = False
 
 BUILTIN_FUNCTIONS = {
-    "/": lambda a, b: Number(a.value / b.value),
-    "*": lambda a, b: Number(a.value * b.value),
-    "+": lambda a, b: Number(a.value + b.value),
-    "-": lambda a, b: Number(a.value - b.value),
+    "/":  lambda a, b: ASTNumber(a.value / b.value),
+    "*":  lambda a, b: ASTNumber(a.value * b.value),
+    "+":  lambda a, b: ASTNumber(a.value + b.value),
+    "-":  lambda a, b: ASTNumber(a.value - b.value),
+    "<":  lambda a, b: ASTNumber(int(a.value < b.value)),
+    "<=": lambda a, b: ASTNumber(int(a.value <= b.value)),
+    ">":  lambda a, b: ASTNumber(int(a.value > b.value)),
+    ">=": lambda a, b: ASTNumber(int(a.value >= b.value)),
+    "==":  lambda a, b: ASTNumber(int(a.value == b.value)),
+    "!=":  lambda a, b: ASTNumber(int(a.value != b.value)),
     "print": lambda *a: print(*a)
 }
 
@@ -71,6 +54,16 @@ def interpret_statement(node: ASTStatement, env: Environment):
             return
         case ASTNamedBlock(block_name, block):
             return interpret_block(block, env)
+        case ASTIfStatement(cond, true_branch, false_branch):
+            cond_res = interpret_expression(cond, env)
+            if not isinstance(cond_res, ASTNumber):
+                raise NotImplementedError(f"If condition only implemented for number values, not {type(cond_res)}")
+            block_env = Environment(parent=env)
+            if cond_res.value != 0:
+                return interpret_block(true_branch, block_env)
+
+            if false_branch is not None:
+                return interpret_block(false_branch, block_env)
         case v:
             raise NotImplementedError(f"Interpret statement not implemented for {v}")
 
@@ -78,10 +71,8 @@ def interpret_statement(node: ASTStatement, env: Environment):
 def interpret_expression(node: ASTExpression | ASTNumber | ASTBinaryOp, env: Environment):
     match node:
         case ASTNumber(val):
-            return Number(val)
+            return ASTNumber(val)
         case ASTIdentifier(ident):
-            return env.get(ident)
-        case Ident(ident):
             return env.get(ident)
         case ASTBinaryOp(a, op, b):
             val_a = interpret_expression(a, env)
@@ -89,10 +80,8 @@ def interpret_expression(node: ASTExpression | ASTNumber | ASTBinaryOp, env: Env
             val_op = op.value
             op_func = env.get(val_op)
             return interpret_func_call(op_func, (val_a, val_b), env)
-        case ASTInlineFunctionDeclare(arguments, body):
-            return Function(arguments, code=body)
-        case ASTFunctionDeclare(arguments, body):
-            return Function(arguments, code=body)
+        case ASTFunctionDeclare(_) as func_declare:
+            return func_declare
         case ASTFunctionCall(func_name, arguments):
             arg_values = [interpret_expression(arg, env) for arg in arguments]
             func = env.get(func_name)
@@ -104,16 +93,42 @@ def interpret_expression(node: ASTExpression | ASTNumber | ASTBinaryOp, env: Env
 
     return interpret_expression(node.value, env)
 
-def interpret_func_call(func: Function | Callable, arguments, env: Environment):
+def interpret_func_call(func: Callable | ASTFunctionDeclare, arguments, env: Environment):
     if callable(func):
         return func(*arguments)
 
-    assert isinstance(func, Function), type(func)
+    assert isinstance(func, ASTFunctionDeclare), type(func)
+
+    if JIT_COMPILE and func.jit_function_call is None:
+        try:
+            JIT_ENGINE.compile_function(func, env)
+        except NotImplementedError as err:
+            if DEBUG:
+                raise err
+            else:
+                logger.error(err, exc_info=True)
+
+    if func.jit_function_call is not None:
+        if SHADOW_JIT:
+            new_env = Environment(parent=env, env=dict(zip(func.arguments, arguments)))
+            interp_res = interpret_block(func.body, new_env)
+            try:
+                jit_res = func.jit_function_call(*arguments)
+                if interp_res != jit_res:
+                    print(f"Jit and interp got different results: jit({jit_res}), interp({interp_res})")
+                return jit_res
+            except JITValuError:
+                logger.info("Failed to call jitted function")
+        else:
+            try:
+                return func.jit_function_call(*arguments)
+            except JITValuError:
+                logger.info("Failed to call jitted function")
 
     if len(func.arguments) != len(arguments):
         raise RuntimeError(f"Wrong number of arguments, got {len(arguments)}, expected {len(func.arguments)}")
     new_env = Environment(parent=env, env=dict(zip(func.arguments, arguments)))
-    return interpret_block(func.code, new_env)
+    return interpret_block(func.body, new_env)
 
 
 if __name__ == "__main__":
@@ -125,7 +140,12 @@ if __name__ == "__main__":
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("--input-file", type=Path, required=True)
     arg_parser.add_argument("--grammar-definition", default=Path(__file__).absolute().parent / "grammar.lark")
+    arg_parser.add_argument("--jit-compile", action="store_true")
+
     args = arg_parser.parse_args()
+
+    JIT_COMPILE = args.jit_compile
+    JIT_ENGINE = JITEngine(compilation_dir=".jil_cache")
 
     parser, ast_builder = initialize_parser(args.grammar_definition)
 

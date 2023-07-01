@@ -1,0 +1,26 @@
+# if/else examples
+age = 81
+
+if age >= 18:
+    if age < 65:
+        r = 3
+        print(0)
+    else:
+        print(2)
+else:
+    print(1)
+
+# variables are 'local' and do not spill to parent block
+# print(r)
+
+gt = fn(a, b):
+    a > b
+
+if gt(2, 3):
+    print(111)
+
+t = fn(n):
+    if n != 1234:
+        print(4321)
+
+t(0)

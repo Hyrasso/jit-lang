@@ -1,6 +1,6 @@
 from abc import ABC
-from dataclasses import dataclass
-from typing import Tuple
+from dataclasses import dataclass, field
+from typing import Callable, Tuple
 
 import lark
 from lark.indenter import Indenter
@@ -24,6 +24,11 @@ class ASTNumber(ASTNode):
     def from_tree(cls, children):
         val, = children
         return cls(int(val))
+    
+    def __eq__(self, other: "ASTNumber") -> bool:
+        if not isinstance(other, ASTNumber):
+            return False
+        return other.value == self.value
 
 class ASTOp(ASTNode):...
 class ASTIdentifier(ASTNode):
@@ -94,19 +99,29 @@ class ASTNamedBlock(ASTNode):
         return f"{cls_name}({self.name!r}, {self.block!r})"
 
 @dataclass
+class ASTIfStatement(ASTNode):
+    cond: ASTExpression
+    if_block: ASTBlock
+    else_block: ASTBlock | None
+    @classmethod
+    def from_tree(cls, children):
+        cond, if_block, *else_block = children
+        return cls(cond, if_block, else_block[0] if else_block else None)
+
+@dataclass
 class ASTFunctionDeclare(ASTNode):
     arguments: Tuple[str]
     body: ASTBlock
+
+    # runtime attribute
+    jit_function_call: Callable | None = None
     @classmethod
     def from_tree(cls, children):
         *args, body = children
         return cls(tuple(map(str, args)), body)
 
-class ASTInlineFunctionDeclare(ASTFunctionDeclare):
-    @classmethod
-    def from_tree(cls, children):
-        *args, expression = children
-        return super().from_tree([*args, ASTBlock((ASTStatement(expression),))])
+def inline_function_to_function_declare(children, *args):
+    print(children, args)
 
 @dataclass
 class ASTFunctionCall(ASTNode):
@@ -135,9 +150,13 @@ class ASTBuilder(lark.Transformer):
     block = ASTBlock.from_tree
     named_block = ASTNamedBlock.from_tree
     func_declare = ASTFunctionDeclare.from_tree
-    inline_func_declare = ASTInlineFunctionDeclare.from_tree
+    @staticmethod
+    def inline_func_declare(children):
+        *args, expression = children
+        return ASTFunctionDeclare.from_tree([*args, ASTBlock((ASTStatement(expression),))])
     func_call = ASTFunctionCall.from_tree
     statement = ASTStatement.from_tree
+    if_statement = ASTIfStatement.from_tree
     assignment = ASTAssignment.from_tree
     expression = ASTExpression.from_tree
     identifier = ASTIdentifier.from_tree

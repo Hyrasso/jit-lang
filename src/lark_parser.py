@@ -18,6 +18,7 @@ def initialize_parser(grammar_file=Path):
         postlex=BlockIndenter()
         )
 
+    # TODO: check that the full grammar has been parsed properly and not Tree object from lark are left
     return parser, ast_builder
 
 if __name__ == "__main__":

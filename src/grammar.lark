@@ -3,20 +3,22 @@ start: module
 
 module: block
 
-block: statement+
+block: _NEW_LINE? statement+
 
 statement: expression _NEW_LINE+
            | assignment 
            | named_block
+           | if_statement
 
 named_block: IDENT ":" _NEW_LINE _INDENT block _DEDENT
+
+if_statement: "if" expression ":" _NEW_LINE  _INDENT block _DEDENT ("else" ":" _NEW_LINE _INDENT block _DEDENT)?
 
 assignment: IDENT "=" expression _NEW_LINE
             | IDENT "=" func_declare
 
 expression: prec_1
             | inline_func_declare
-            | func_call
 
 _list{x, sep} : x (sep x)*
 
@@ -27,14 +29,28 @@ func_declare : "fn" "(" _list{IDENT, ","}  ")" ":" _NEW_LINE _INDENT block _DEDE
 func_call: IDENT "(" _list{expression, ","}? ")"
 
 
+// logic
 ?prec_1: prec_2 (prec_1_op prec_2)*
-?prec_2: base (prec_2_op base)*
+// add/sub
+?prec_2: prec_3 (prec_2_op prec_3)*
+// mul/div
+?prec_3: base (prec_3_op base)*
 ?base: DECIMAL_NUMBER                -> number
        | IDENT                       -> identifier
+       | func_call
        | "(" expression ")"
 
-?prec_2_op: ASTERISK | SLASH
-?prec_1_op: PLUS | MINUS
+// from lowest to higher precedence
+?prec_1_op: GT | GTE | LT | LTE | EQ | NEQ
+?prec_2_op: PLUS | MINUS
+?prec_3_op: ASTERISK | SLASH
+
+GT: ">"
+LT: "<"
+EQ: "=="
+GTE: ">="
+LTE: "<="
+NEQ: "!="
 
 ASTERISK: "*"
 SLASH: "/"
@@ -56,7 +72,7 @@ LF : /\n/
 LINE_INDENT: /[\t ]*/
 _NEW_LINE: (CR? LF LINE_INDENT?)+
 
-COMMENT: /#[^\n]*/
+COMMENT: /#[^\n]*\n+/
 %ignore COMMENT
 
 %declare _INDENT _DEDENT

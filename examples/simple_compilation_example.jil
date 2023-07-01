@@ -1,0 +1,17 @@
+f = fn (a, b):
+    inner_f = fn(a):
+        a + 1
+    inner_f(a) + b
+
+res = f(3, 5)
+
+print(res)
+
+ff = fn(a,b,c):
+    tmp = a / c
+    tmp - b
+
+v = 1 - 2
+
+print(ff(6, v, 3))
+print(ff(6, v, 4))
