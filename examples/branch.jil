@@ -1,6 +1,6 @@
 # if/else examples
-age = 81
-
+age: int = 81
+# r: int = 0
 if age >= 18:
     if age < 65:
         r = 3
@@ -13,20 +13,20 @@ else:
 # variables are 'local' and do not spill to parent block
 # print(r)
 
-gt = fn(a, b):
+gt: fn(int,int)int = fn(a:int, b:int)int:
     a > b
 
 if gt(2, 3):
     print(111)
 
-f = fn(n):
-    r = 0
-    unused = 1
-    a = 0
-    if r == 1:
+f: fn(int)int = fn(n:int)int:
+    r:int = 0
+    unused:int = 1
+    a:int = 0
+    if r == n:
         r = 1
     else:
-        r = 0
+        r = 3
     if a == 1:
         a = 1
     if a == 2:
@@ -35,7 +35,7 @@ f = fn(n):
         a = 3
     if a == 4:
         a = 4
-    r
+    r + a
 
 print(f(0))
 print(f(1))

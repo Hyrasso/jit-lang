@@ -1,12 +1,12 @@
-fn ( y ) : 3 * 2
+fn ( y: int ) int : 3 * 2
 
-f1 = fn(x):x+1
+f1: fn(int) int = fn ( x: int ) int : x+1
 
-f2 = fn (a, b):
-    inner_f = fn(x):
+f2: fn(int, int) int = fn (a: int, b: int) int:
+    inner_f: fn(int)int = fn(x: int) int:
         a + x
-    (f1(a)) + b * 2 - (inner_f(0))
+    f1(a) + b * 2 - inner_f(0)
 
 print(f1(3))
 
-print(f2(7, 4))
+print(f2(7, 5))

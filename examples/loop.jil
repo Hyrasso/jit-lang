@@ -1,0 +1,9 @@
+
+loopn: fn(int)int = fn(stop:int)int:
+    c: int = 0
+    while c < stop:
+        c = c + 1
+    c
+
+print(loopn(10))
+print(loopn(10000))

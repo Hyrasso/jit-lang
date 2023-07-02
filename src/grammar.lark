@@ -6,27 +6,43 @@ module: block
 block: _NEW_LINE? statement+
 
 statement: expression _NEW_LINE+
-           | assignment 
-           | named_block
-           | if_statement
+         | var_declaration 
+         | var_assignment 
+         // | named_block
+         | if_statement
+         | while_statement
 
-named_block: IDENT ":" _NEW_LINE _INDENT block _DEDENT
+// named_block: IDENT ":" _NEW_LINE _INDENT block _DEDENT
 
 if_statement: "if" expression ":" _NEW_LINE  _INDENT block _DEDENT ("else" ":" _NEW_LINE _INDENT block _DEDENT)?
+while_statement: "while" expression ":" _NEW_LINE _INDENT block _DEDENT
 
-assignment: IDENT "=" expression _NEW_LINE
-            | IDENT "=" func_declare
+typ: identifier
+   | function_type
+    // | expression
+
+typed_ident: identifier ":" typ
+
+// the lvalue will always be an identifier
+var_declaration: identifier ":" typ "=" expression _NEW_LINE
+               | identifier ":" typ "=" func_declare
+
+// eventually the left value will have other possibilities that an identifier, eg: a[1] = 2
+var_assignment: identifier "=" expression _NEW_LINE
+              | identifier "=" func_declare
 
 expression: prec_1
             | inline_func_declare
 
 _list{x, sep} : x (sep x)*
 
-inline_func_declare: "fn" "(" _list{IDENT, ","}?  ")" ":" expression
+inline_func_declare: "fn" "(" _list{typed_ident, ","}?  ")" typ ":" expression
 
-func_declare : "fn" "(" _list{IDENT, ","}?  ")" ":" _NEW_LINE _INDENT block _DEDENT
+function_type: "fn" "(" _list{identifier, ","}? ")" typ
 
-func_call: IDENT "(" _list{expression, ","}? ")"
+func_declare : "fn" "(" _list{typed_ident, ","}?  ")" typ ":" _NEW_LINE _INDENT block _DEDENT
+
+func_call: identifier "(" _list{expression, ","}? ")"
 
 
 // logic
@@ -36,9 +52,9 @@ func_call: IDENT "(" _list{expression, ","}? ")"
 // mul/div
 ?prec_3: base (prec_3_op base)*
 ?base: DECIMAL_NUMBER                -> number
-       | IDENT                       -> identifier
-       | func_call
-       | "(" expression ")"
+     | identifier
+     | func_call
+     | "(" expression ")"
 
 // from lowest to higher precedence
 ?prec_1_op: GT | GTE | LT | LTE | EQ | NEQ
@@ -58,7 +74,7 @@ PLUS: "+"
 MINUS: "-"
 
 // Any char that is not a white space and that is 
-IDENT: /[^\W\d]\w*/u
+identifier: /[^\W\d]\w*/u
 
 DIGIT: "0".."9"
 DECIMAL_NUMBER: DIGIT+

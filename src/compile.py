@@ -245,7 +245,7 @@ def compile_function(func: ASTFunctionDeclare, env, compilation_context: Compila
     for idx, (addr, arg) in enumerate(zip(systemv_call_order([8] * len(func.arguments)), func.arguments)):
         dest = StackOffset(-(current_size - idx * 8))
         compilation_context.emit_move(source=addr, destination=dest)
-        func_env[arg] = dest
+        func_env[arg.ident.value] = dest
 
 
     # set arguments
@@ -263,8 +263,12 @@ def compile_statement(stmt, env, compilation_context):
     match stmt.value:
         case ASTExpression(value):
             compile_expression(value, env, compilation_context)
+        case ASTVarDeclaration(ident, var_type,  rvalue):
+            compile_var_declaration(ident, var_type, rvalue, env, compilation_context)
         case ASTAssignment((lvalue, rvalue)):
-            rvalue = compile_assignement(lvalue, rvalue, env, compilation_context)
+            if not isinstance(lvalue, ASTIdentifier):
+                raise NotImplementedError(f"Compiling assignement to {lvalue} not implemented")
+            compile_var_assignement(lvalue, rvalue, env, compilation_context)
         case ASTNamedBlock():
             raise NotImplementedError(f"Interpret statement not implemented for named blocks")
         case ASTIfStatement() as if_stmt:
@@ -292,7 +296,7 @@ def compile_if_statement(if_stmt: ASTIfStatement, env: Environment, compilation_
     cond_false_block = CompilationContext(block_label=cond_false_label, stack_size=compilation_context.stack_size)
     if if_stmt.else_block is not None:
         cond_false_env = Environment(parent=env)
-        compile_block(if_stmt.if_block, cond_false_env, cond_false_block)
+        compile_block(if_stmt.else_block, cond_false_env, cond_false_block)
     cond_false_block.emit_jump(end_if_label)
     compilation_context.include_block(cond_false_block)
 
@@ -347,7 +351,9 @@ def compile_expression(exp, env, compilation_context: CompilationContext):
         case o:
             raise NotImplementedError(f"Compilation of {type(o)} not implemented yet")
 
-def compile_assignement(lvalue, rvalue, env: Environment, compilation_context: CompilationContext):
+def compile_var_declaration(lvalue, var_type, rvalue, env: Environment, compilation_context: CompilationContext):
+    if not isinstance(var_type.value, ASTIdentifier) and not var_type.value.value == "int":
+        raise NotImplementedError(f"Compiling variablle declaration of type {var_type.value} is not implemented")
     if not isinstance(lvalue, ASTIdentifier):
         raise NotImplementedError(f"Assigning to anything else than an identifier is not supported yet (found: {type(lvalue)})")
     match rvalue:
@@ -363,6 +369,18 @@ def compile_assignement(lvalue, rvalue, env: Environment, compilation_context: C
             env.set(lvalue.value, var_addr)
             compile_expression(exp, env, compilation_context)
             compilation_context.emit_move(source=Register.RAX, destination=var_addr)
+
+def compile_var_assignement(lvalue, rvalue, env, compilation_context: CompilationContext):
+    match rvalue:
+        case ASTExpression(exp):
+            if not isinstance(lvalue, ASTIdentifier):
+                raise NotImplementedError(f"Compiling assignement to {exp} not implemented")
+            var_addr = env.get(lvalue.value)
+            # TODO: check that types of value and variable match
+            compile_expression(exp, env, compilation_context)
+            compilation_context.emit_move(source=Register.RAX, destination=var_addr)
+        case o:
+            raise NotImplementedError(f"Compiling assigning {o} not implemented")
 
 def compile_function_call(func, arguments, env: Environment, compilation_context: CompilationContext):
     if isinstance(func, str):

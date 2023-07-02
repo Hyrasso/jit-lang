@@ -73,7 +73,30 @@ class ASTAssignment(ASTNode):
     @classmethod
     def from_tree(cls, children):
         lvalue,  rvalue = children
-        return cls((ASTIdentifier(str(lvalue)), rvalue))
+        return cls((lvalue, rvalue))
+
+class ASTType(ASTNullary):
+    ...
+
+@dataclass
+class ASTFunctionType(ASTType):
+    arguments_type: Tuple[ASTType]
+    return_type: ASTType
+
+    @classmethod
+    def from_tree(cls, children):
+        *args, return_type = children
+        return cls(tuple(args), return_type)
+
+@dataclass
+class ASTVarDeclaration(ASTNode):
+    ident: ASTIdentifier
+    var_type: ASTIdentifier | ASTFunctionType
+    value: ASTExpression
+    @classmethod
+    def from_tree(cls, children):
+        lvalue, var_type, rvalue = children
+        return cls(lvalue, var_type, rvalue)
 
 class ASTModule(ASTNullary):...
 
@@ -109,19 +132,37 @@ class ASTIfStatement(ASTNode):
         return cls(cond, if_block, else_block[0] if else_block else None)
 
 @dataclass
+class ASTWhileStatement(ASTNode):
+    cond: ASTExpression
+    block: ASTBlock
+    @classmethod
+    def from_tree(cls, children):
+        cond, block = children
+        return cls(cond, block)
+
+@dataclass
+class ASTTypedIdent(ASTNode):
+    ident: ASTIdentifier
+    ident_type: ASTIdentifier | ASTFunctionType
+    @classmethod
+    def from_tree(cls, children):
+        ident, ident_type = children
+        return cls(ident, ident_type)
+
+@dataclass
 class ASTFunctionDeclare(ASTNode):
-    arguments: Tuple[str]
+    arguments: Tuple[ASTTypedIdent]
+    return_type: ASTIdentifier
     body: ASTBlock
 
     # runtime attribute
     jit_function_call: Callable | None = None
     @classmethod
     def from_tree(cls, children):
-        *args, body = children
-        return cls(tuple(map(str, args)), body)
+        *typed_args, return_type, body = children
+        return cls(tuple(typed_args), return_type, body)
 
-def inline_function_to_function_declare(children, *args):
-    print(children, args)
+
 
 @dataclass
 class ASTFunctionCall(ASTNode):
@@ -130,7 +171,7 @@ class ASTFunctionCall(ASTNode):
     @classmethod
     def from_tree(cls, children):
         func_name, *args = children
-        return cls(str(func_name), tuple(args))
+        return cls(func_name, tuple(args))
 
 class ASTBuilder(lark.Transformer):
     def __init__(self, visit_tokens: bool = True) -> None:
@@ -157,12 +198,20 @@ class ASTBuilder(lark.Transformer):
     func_call = ASTFunctionCall.from_tree
     statement = ASTStatement.from_tree
     if_statement = ASTIfStatement.from_tree
-    assignment = ASTAssignment.from_tree
+    while_statement = ASTWhileStatement.from_tree
+    var_declaration = ASTVarDeclaration.from_tree
+    var_assignment = ASTAssignment.from_tree
+
+    typed_ident = ASTTypedIdent.from_tree
+    function_type = ASTFunctionType.from_tree
+
     expression = ASTExpression.from_tree
+    typ = ASTType.from_tree
     identifier = ASTIdentifier.from_tree
     number = ASTNumber.from_tree
     prec_1 = ASTBinaryOp.from_tree
     prec_2 = ASTBinaryOp.from_tree
+    prec_3 = ASTBinaryOp.from_tree
 
 
 class BlockIndenter(Indenter):

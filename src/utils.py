@@ -13,7 +13,17 @@ class Environment:
         
         raise RuntimeError(f"Unknown {val} in env")
     
+    def update(self, var, val):
+        if var in self._env:
+            self._env[var] = val
+        else:
+            if self.parent is None:
+                raise RuntimeError(f"Assigning to undeclared var {var}")
+            else:
+                self.parent.update(var, val)
+
     # systematicaly shadow parent env
     def set(self, var, val):
+        # also shadow var in the same environement, the shadowed var is not accessible anymore after this
         self._env[var] = val
 

@@ -52,11 +52,18 @@ def interpret_statement(node: ASTStatement, env: Environment):
         case ASTExpression(value):
             return interpret_expression(value, env)
         case ASTAssignment((lvalue, rvalue)):
+            assert isinstance(lvalue, ASTIdentifier), type(lvalue)
             rvalue = interpret_expression(rvalue, env)
-            env.set(lvalue.value, rvalue)
+            env.update(lvalue.value, rvalue)
             return
-        case ASTNamedBlock(block_name, block):
-            return interpret_block(block, env)
+        case ASTVarDeclaration(var_name, var_type, rvalue):
+            assert isinstance(var_name, ASTIdentifier), type(var_name)
+            rvalue = interpret_expression(rvalue, env)
+            # TODO: check that var_type and rvalue match
+            # if not isinstance(rvalue, var_type):
+            env.set(var_name.value, rvalue)
+        # case ASTNamedBlock(block_name, block):
+        #     return interpret_block(block, env)
         case ASTIfStatement(cond, true_branch, false_branch):
             cond_res = interpret_expression(cond, env)
             if not isinstance(cond_res, ASTNumber):
@@ -87,7 +94,7 @@ def interpret_expression(node: ASTExpression | ASTNumber | ASTBinaryOp, env: Env
             return func_declare
         case ASTFunctionCall(func_name, arguments):
             arg_values = [interpret_expression(arg, env) for arg in arguments]
-            func = env.get(func_name)
+            func = env.get(func_name.value)
             return interpret_func_call(func, arg_values, env)
 
     
@@ -116,7 +123,11 @@ def interpret_func_call(func: Callable | ASTFunctionDeclare, arguments, env: Env
 
     if func.jit_function_call is not None:
         if SHADOW_JIT:
-            new_env = Environment(parent=env, env=dict(zip(func.arguments, arguments)))
+            argument_env = {}
+            for arg_type, call_argument in zip(func.arguments, arguments):
+                # TODO: check that the types of the arguments passed to the function match the ones of the function type definition
+                argument_env[arg_type.ident.value] = call_argument
+            new_env = Environment(parent=env, env=argument_env)
             t = time.perf_counter_ns()
             interp_res = interpret_block(func.body, new_env)
             dt = time.perf_counter_ns() - t
@@ -139,7 +150,11 @@ def interpret_func_call(func: Callable | ASTFunctionDeclare, arguments, env: Env
 
     if len(func.arguments) != len(arguments):
         raise RuntimeError(f"Wrong number of arguments, got {len(arguments)}, expected {len(func.arguments)}")
-    new_env = Environment(parent=env, env=dict(zip(func.arguments, arguments)))
+    argument_env = {}
+    for arg_type, call_argument in zip(func.arguments, arguments):
+        # TODO: check that the types of the arguments passed to the function match the ones of the function type definition
+        argument_env[arg_type.ident.value] = call_argument
+    new_env = Environment(parent=env, env=argument_env)
     return interpret_block(func.body, new_env)
 
 
