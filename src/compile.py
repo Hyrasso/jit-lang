@@ -233,6 +233,12 @@ class CompilationContext:
             f"jmp {cond_false_label}",
         ])
 
+    def emit_cond_jump(self, cond_true_label):
+        self.block.extend([
+            "cmp $0, %rax",
+            f"jne {cond_true_label}",
+        ])
+
 
 
 def compile_function(func: ASTFunctionDeclare, env, compilation_context: CompilationContext, inline=False):
@@ -274,6 +280,8 @@ def compile_statement(stmt, env, compilation_context):
         case ASTIfStatement() as if_stmt:
             compile_if_statement(if_stmt, env, compilation_context)
             # raise NotImplementedError(f"Interpret statement not implemented for if statement")
+        case ASTWhileStatement() as while_stmt:
+            compile_while_statement(while_stmt, env, compilation_context)
         case v:
             raise NotImplementedError(f"Interpret statement not implemented for {v}")
 
@@ -302,6 +310,13 @@ def compile_if_statement(if_stmt: ASTIfStatement, env: Environment, compilation_
 
     compilation_context.emit_jump_target(end_if_label)
 
+def compile_while_statement(while_stmt: ASTWhileStatement, env: Environment, compilation_context: CompilationContext):
+    loop_label = compilation_context.get_unique_label("while")
+    block_ctx = CompilationContext(block_label=loop_label, stack_size=compilation_context.stack_size)
+    compile_block(while_stmt.block, env, block_ctx)
+    compile_expression(while_stmt.cond, env, block_ctx)
+    block_ctx.emit_cond_jump(loop_label)
+    compilation_context.include_block(block_ctx)
 
 def compile_expression(exp, env, compilation_context: CompilationContext):
     # kinda inline function call

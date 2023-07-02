@@ -7,3 +7,8 @@ loopn: fn(int)int = fn(stop:int)int:
 
 print(loopn(10))
 print(loopn(10000))
+
+c: int = 4
+while c != 0:
+    print(c)
+    c = c - 1

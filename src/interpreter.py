@@ -74,6 +74,14 @@ def interpret_statement(node: ASTStatement, env: Environment):
 
             if false_branch is not None:
                 return interpret_block(false_branch, block_env)
+        case ASTWhileStatement(cond, block):
+            cond_res = interpret_expression(cond, env)
+            if not isinstance(cond_res, ASTNumber):
+                raise NotImplementedError(f"While condition should resolve to a number, not {cond_res}")
+            while cond_res.value != 0:
+                interpret_block(block, env)
+                cond_res = interpret_expression(cond, env)
+            return
         case v:
             raise NotImplementedError(f"Interpret statement not implemented for {v}")
 

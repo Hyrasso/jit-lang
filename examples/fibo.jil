@@ -1,0 +1,27 @@
+
+fibo: fn(int)int = fn(n:int)int:
+    res:int = 0
+    if n == 0:
+        res = 0
+    else:
+        if n <= 2:
+            res = 1
+        else:
+            n = n - 2
+            a: int = 1
+            res = 1
+            tmp: int = 0
+            # print(n)
+            while n != 0:
+                tmp = a
+                a = res
+                res = tmp + res
+                n = n - 1
+    res
+
+print(fibo(0))
+print(fibo(1))
+print(fibo(2))
+print(fibo(3))
+print(fibo(15))
+print(fibo(80))
