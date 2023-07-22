@@ -18,6 +18,16 @@ class ASTNode(ABC):
         cls_name = self.__class__.__name__
         return f"{cls_name}({repr(self.value) if self.value is not None else ''})"
 
+# not really an ast node...
+class ASTUninitValue(ASTNode):
+    ...
+
+class ASTInferType(ASTNode):
+    ...
+
+class ASTNoReturn(ASTNode):
+    ...
+
 # Terminals
 class ASTNumber(ASTNode):
     @classmethod
@@ -78,24 +88,69 @@ class ASTAssignment(ASTNode):
 class ASTType(ASTNullary):
     ...
 
+class ASTReturnType(ASTType):
+    ...
+
+@dataclass
+class ASTTypedIdent(ASTNode):
+    ident: ASTIdentifier
+    ident_type: ASTType
+    @classmethod
+    def from_tree(cls, children):
+        ident, ident_type = children
+        return cls(ident, ident_type)
+
 @dataclass
 class ASTFunctionType(ASTType):
     arguments_type: Tuple[ASTType]
-    return_type: ASTType
+    return_type: ASTType | ASTNoReturn
 
     @classmethod
     def from_tree(cls, children):
-        *args, return_type = children
+        if not children:
+            return cls(arguments_type=tuple(), return_type=ASTNoReturn(None))
+
+        if isinstance(children[-1], ASTReturnType):
+            *args, return_type = children
+        else:
+            args = children
+            return_type = ASTNoReturn(None)
+
         return cls(tuple(args), return_type)
+
+
+class ASTStructureType(ASTType):
+    fields: Tuple[ASTTypedIdent]
+    @classmethod
+    def from_tree(cls, children):
+        return cls(tuple(children))
+
+
+# kinda weird to have this node that should never existin in the final AST
+class ASTVarDeclarationAndAssignment(ASTNode):
+    @classmethod
+    def from_tree(cls, children):
+        lvalue, *var_type, rvalue = children
+        if var_type:
+            var_type = var_type
+        else:
+            var_type = ASTInferType(None)
+        return cls((lvalue, var_type, rvalue))
+
 
 @dataclass
 class ASTVarDeclaration(ASTNode):
     ident: ASTIdentifier
-    var_type: ASTIdentifier | ASTFunctionType
-    value: ASTExpression
+    var_type: ASTIdentifier | ASTType
+    value: ASTExpression | ASTUninitValue
     @classmethod
     def from_tree(cls, children):
-        lvalue, var_type, rvalue = children
+        if isinstance(children[0], ASTVarDeclarationAndAssignment):
+            child, = children
+            return cls(*child.value)
+
+        lvalue, var_type = children
+        rvalue = ASTUninitValue(None)
         return cls(lvalue, var_type, rvalue)
 
 class ASTModule(ASTNullary):...
@@ -141,27 +196,24 @@ class ASTWhileStatement(ASTNode):
         return cls(cond, block)
 
 @dataclass
-class ASTTypedIdent(ASTNode):
-    ident: ASTIdentifier
-    ident_type: ASTIdentifier | ASTFunctionType
-    @classmethod
-    def from_tree(cls, children):
-        ident, ident_type = children
-        return cls(ident, ident_type)
-
-@dataclass
 class ASTFunctionDeclare(ASTNode):
     arguments: Tuple[ASTTypedIdent]
-    return_type: ASTIdentifier
+    return_type: ASTIdentifier | ASTNoReturn
     body: ASTBlock
 
     # runtime attribute
     jit_function_call: Callable | None = None
     @classmethod
     def from_tree(cls, children):
-        *typed_args, return_type, body = children
-        return cls(tuple(typed_args), return_type, body)
+        *typed_args_and_return, body = children
 
+        if typed_args_and_return and isinstance(typed_args_and_return[-1], ASTReturnType):
+            *typed_args, return_type = typed_args_and_return
+        else:
+            return_type = ASTNoReturn(None)
+            typed_args = typed_args_and_return
+
+        return cls(tuple(typed_args), return_type, body)
 
 
 @dataclass
@@ -172,6 +224,24 @@ class ASTFunctionCall(ASTNode):
     def from_tree(cls, children):
         func_name, *args = children
         return cls(func_name, tuple(args))
+
+
+@dataclass
+class ASTStructMember(ASTNode):
+    name: ASTIdentifier
+    value: ASTExpression
+    @classmethod
+    def from_tree(cls, children):
+        name, value = children
+        return cls(name, value)
+
+@dataclass
+class ASTStructValue(ASTNode):
+    fields: Tuple[ASTStructMember]
+    @classmethod
+    def from_tree(cls, children):
+        return cls(tuple(children))
+
 
 class ASTBuilder(lark.Transformer):
     def __init__(self, visit_tokens: bool = True) -> None:
@@ -200,13 +270,19 @@ class ASTBuilder(lark.Transformer):
     if_statement = ASTIfStatement.from_tree
     while_statement = ASTWhileStatement.from_tree
     var_declaration = ASTVarDeclaration.from_tree
+    var_declaration_and_assignement = ASTVarDeclarationAndAssignment.from_tree
     var_assignment = ASTAssignment.from_tree
 
     typed_ident = ASTTypedIdent.from_tree
     function_type = ASTFunctionType.from_tree
+    struct_type = ASTStructureType.from_tree
+    
+    struct_member = ASTStructMember.from_tree
+    struct_value = ASTStructValue.from_tree
 
     expression = ASTExpression.from_tree
     typ = ASTType.from_tree
+    return_typ = ASTReturnType.from_tree
     identifier = ASTIdentifier.from_tree
     number = ASTNumber.from_tree
     prec_1 = ASTBinaryOp.from_tree

@@ -1,0 +1,13 @@
+s: {a: u64, b: u64}
+
+s = {a: 1, b: 2}
+
+pair : structure = {left: u64, right: u64}
+
+p: pair = { left: 1, right: 2 }
+
+f : fn({a: u64, b: u64}) {left: u64, right: u64} = fn(x: {a: u64, b: u64}) {left: u64, right: u64} :
+    {left: 3, right: 9}
+
+g : = fn(s: {l: u64, r: u64}):
+    pass

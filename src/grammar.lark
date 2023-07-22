@@ -19,31 +19,45 @@ while_statement: "while" expression ":" _NEW_LINE _INDENT block _DEDENT
 
 typ: identifier
    | function_type
+   | struct_type
     // | expression
 
 typed_ident: identifier ":" typ
 
-// the lvalue will always be an identifier
-var_declaration: identifier ":" typ "=" expression _NEW_LINE
-               | identifier ":" typ "=" func_declare
+// the lvalue is an identifier for now
+var_declaration: identifier ":" typ _NEW_LINE
+               | var_declaration_and_assignement
+
+
+var_declaration_and_assignement: identifier ":" typ? "=" expression _NEW_LINE
+                               | identifier ":" typ? "=" func_declare
+
 
 // eventually the left value will have other possibilities that an identifier, eg: a[1] = 2
 var_assignment: identifier "=" expression _NEW_LINE
               | identifier "=" func_declare
 
-expression: prec_1
-            | inline_func_declare
+// probably not the best way to do it, but is used to identify the return type of a function vs the arguments
 
-_list{x, sep} : x (sep x)*
+ret_typ: typ
 
-inline_func_declare: "fn" "(" _list{typed_ident, ","}?  ")" typ ":" expression
+function_type: "fn" "(" _list{typ, ","}? ")" ret_typ?
 
-function_type: "fn" "(" _list{identifier, ","}? ")" typ
-
-func_declare : "fn" "(" _list{typed_ident, ","}?  ")" typ ":" _NEW_LINE _INDENT block _DEDENT
+func_declare : "fn" "(" _list{typed_ident, ","}?  ")" ret_typ? ":" _NEW_LINE _INDENT block _DEDENT
 
 func_call: identifier "(" _list{expression, ","}? ")"
 
+struct_type: "{" _list{typed_ident, ","} "}"
+
+struct_member: identifier ":" expression
+
+struct_value: "{" _list{struct_member, ","} "}"
+
+expression: prec_1
+
+_list{x, sep} : x (sep x)*
+
+inline_func_declare: "fn" "(" _list{typed_ident, ","}?  ")" ret_typ? ":" expression
 
 // logic
 ?prec_1: prec_2 (prec_1_op prec_2)*
@@ -54,6 +68,8 @@ func_call: identifier "(" _list{expression, ","}? ")"
 ?base: DECIMAL_NUMBER                -> number
      | identifier
      | func_call
+     | struct_value
+     | inline_func_declare
      | "(" expression ")"
 
 // from lowest to higher precedence

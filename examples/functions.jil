@@ -10,3 +10,15 @@ f2: fn(int, int) int = fn (a: int, b: int) int:
 print(f1(3))
 
 print(f2(7, 5))
+
+infered_type_f := fn(a: int) int:
+    a
+
+no_arg_func : fn() int = fn() int:
+    1
+
+no_return_func : fn(int) = fn(x: int):
+    x
+
+nothing_func : fn() = fn():
+    3
