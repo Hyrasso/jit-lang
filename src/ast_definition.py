@@ -26,7 +26,10 @@ class ASTInferType(ASTNode):
     ...
 
 class ASTNoReturn(ASTNode):
-    ...
+    def __eq__(self, other) -> bool:
+        return isinstance(other, ASTNoReturn)
+    def cast(self, obj):
+        return self
 
 # Terminals
 class ASTNumber(ASTNode):

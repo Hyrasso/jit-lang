@@ -1,24 +1,36 @@
-fn ( y: int ) int : 3 * 2
+fn ( y: u64 ) u64 : 3 * 2
 
-f1: fn(int) int = fn ( x: int ) int : x+1
+f1: fn(u64) u64 = fn ( x: u64 ) u64 : x+1
 
-f2: fn(int, int) int = fn (a: int, b: int) int:
-    inner_f: fn(int)int = fn(x: int) int:
+f2: fn(u64, u64) u64 = fn (a: u64, b: u64) u64:
+    inner_f: fn(u64)u64 = fn(x: u64) u64:
         a + x
     f1(a) + b * 2 - inner_f(0)
 
+# 4
 print(f1(3))
 
+# 11
 print(f2(7, 5))
 
-infered_type_f := fn(a: int) int:
-    a
+# type inference not implemented in the interpreter yet
+# infered_type_f := fn(a: u64) u64:
+#     a
 
-no_arg_func : fn() int = fn() int:
+no_arg_func : fn() u64 = fn() u64:
     1
+print(no_arg_func())
 
-no_return_func : fn(int) = fn(x: int):
+no_return_func : fn(u64) = fn(x: u64):
     x
+no_return_func(1)
 
 nothing_func : fn() = fn():
     3
+nothing_func()
+
+# first class functions
+apply: fn(fn(u64) u64, u64) u64 = fn(f: fn(u64) u64, val: u64) u64:
+    f(val)
+
+print(apply(f1, 1))

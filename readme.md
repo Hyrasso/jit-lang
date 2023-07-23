@@ -10,8 +10,10 @@ Usage exemple: `python src/interpreter.py --input-file examples/fibo.jil --jit-c
 - first class function (check that they can be reassigned and passed as argument and called inside other functions)
     clarify a bit how that works if types only match themselves (is function declaration a value, that can be cast to match the function type?)
 - add location in file to ast nodes for debugging
-- do some type checking
+- ensure type checking works as expected for functions
+- implement that types are not compared structurally, but only if they are exactly the same (casting should happend only on assignment from literal, the rest of the time the types should match exactly)
 - add fixed size array (very similar to struct)
+- fix end of line comments (currently `1 + 1 # comment` breaks the parsing)
 - add slice? (a fat pointer, so a struct with a size + a pointer) (needs to think about where the backing memory comes from, a fixd size array?)
 - read/write for compilation to have print/file read at compile time
 - inline some ast functions during compilation

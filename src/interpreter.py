@@ -15,20 +15,6 @@ JIT_COMPILE = True
 SHADOW_JIT = True
 DEBUG = False
 
-BUILTIN_FUNCTIONS = {
-    "/":  TypedVar(lambda a, b: type(a)(a.value / b.value), ASTInferType(None)),
-    "*":  TypedVar(lambda a, b: type(a)(a.value * b.value), ASTInferType(None)),
-    "+":  TypedVar(lambda a, b: type(a)(a.value + b.value), ASTInferType(None)),
-    "-":  TypedVar(lambda a, b: type(a)(a.value - b.value), ASTInferType(None)),
-    "<":  TypedVar(lambda a, b: type(a)(int(a.value < b.value)), ASTInferType(None)),
-    "<=": TypedVar(lambda a, b: type(a)(int(a.value <= b.value)), ASTInferType(None)),
-    ">":  TypedVar(lambda a, b: type(a)(int(a.value > b.value)), ASTInferType(None)),
-    ">=": TypedVar(lambda a, b: type(a)(int(a.value >= b.value)), ASTInferType(None)),
-    "==":  TypedVar(lambda a, b: type(a)(int(a.value == b.value)), ASTInferType(None)),
-    "!=":  TypedVar(lambda a, b: type(a)(int(a.value != b.value)), ASTInferType(None)),
-    "print": TypedVar(lambda *a: print(*a), ASTInferType(None)),
-}
-
 class Number:
     def __init__(self, value) -> None:
         if isinstance(value, (Number, ASTNumber)):
@@ -61,6 +47,21 @@ class Struct:
         return ASTStructureType(
             tuple(ASTTypedIdent(f.ident, f.value) for f in obj.fields)
         )
+
+# TODO: add type checking to builtin functions
+BUILTIN_FUNCTIONS = {
+    "/":  TypedVar(lambda a, b: type(a)(a.value / b.value), ASTInferType(None)),
+    "*":  TypedVar(lambda a, b: type(a)(a.value * b.value), ASTInferType(None)),
+    "+":  TypedVar(lambda a, b: type(a)(a.value + b.value), ASTInferType(None)),
+    "-":  TypedVar(lambda a, b: type(a)(a.value - b.value), ASTInferType(None)),
+    "<":  TypedVar(lambda a, b: type(a)(int(a.value < b.value)), ASTInferType(None)),
+    "<=": TypedVar(lambda a, b: type(a)(int(a.value <= b.value)), ASTInferType(None)),
+    ">":  TypedVar(lambda a, b: type(a)(int(a.value > b.value)), ASTInferType(None)),
+    ">=": TypedVar(lambda a, b: type(a)(int(a.value >= b.value)), ASTInferType(None)),
+    "==":  TypedVar(lambda a, b: type(a)(int(a.value == b.value)), ASTInferType(None)),
+    "!=":  TypedVar(lambda a, b: type(a)(int(a.value != b.value)), ASTInferType(None)),
+    "print": TypedVar(lambda *a: print(*a), ASTInferType(None)),
+}
 
 BUILTIN_TYPES = {
     "u64": TypedVar(U64, ASTInferType),
@@ -137,6 +138,8 @@ def interpret_typ(node, env: Environment):
     match node:
         case ASTUninitValue(_):
             return node
+        case ASTNoReturn(_):
+            return node
         case ASTIdentifier(ident):
             return env.get(ident)
         case Number(_):
@@ -162,7 +165,7 @@ def interpret_typ(node, env: Environment):
             raise NotImplementedError(f"Interp of type {node} not implemented")
         
 
-def interpret_expression(node: ASTExpression | ASTNumber | ASTBinaryOp, env: Environment) -> ASTNumber | ASTStructValue | ASTFunctionDeclare:
+def interpret_expression(node: ASTExpression | ASTNumber | ASTBinaryOp, env: Environment) -> ASTNumber | ASTStructValue | ASTFunctionDeclare | ASTNoReturn:
     match node:
         case ASTNumber(val):
             return ASTNumber(val)
@@ -192,8 +195,8 @@ def interpret_expression(node: ASTExpression | ASTNumber | ASTBinaryOp, env: Env
             arg_values = [interpret_expression(arg, env) for arg in arguments]
             func = env.get(func_name.value)
             f_ret = interpret_func_call(func, arg_values, env)
-            if isinstance(f_ret, ASTNoReturn):
-                raise NotImplementedError()
+            if f_ret == ASTNoReturn(None):
+                return ASTNoReturn(None)
             return f_ret
         case ASTStructValue(fields):
             interp_fields = list()
@@ -275,7 +278,8 @@ def interpret_func_call(func: Callable | ASTFunctionDeclare, arguments, env: Env
         # TODO: check that the types of the arguments passed to the function match the ones of the function type definition
         call_argument = arg_type.ident_type.cast(call_argument)
         new_env.set(arg_type.ident.value, call_argument, arg_type)
-    return interpret_block(func.body, new_env)
+    res = interpret_block(func.body, new_env)
+    return func.return_type.cast(res)
 
 
 if __name__ == "__main__":
