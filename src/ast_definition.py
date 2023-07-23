@@ -1,5 +1,5 @@
 from abc import ABC
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable, Tuple
 
 import lark
@@ -132,7 +132,7 @@ class ASTVarDeclarationAndAssignment(ASTNode):
     def from_tree(cls, children):
         lvalue, *var_type, rvalue = children
         if var_type:
-            var_type = var_type
+            var_type, = var_type
         else:
             var_type = ASTInferType(None)
         return cls((lvalue, var_type, rvalue))
@@ -229,7 +229,7 @@ class ASTFunctionCall(ASTNode):
 @dataclass
 class ASTStructMember(ASTNode):
     name: ASTIdentifier
-    value: ASTExpression
+    value: "ASTExpression | ASTNumber | ASTStructValue"
     @classmethod
     def from_tree(cls, children):
         name, value = children
@@ -240,8 +240,18 @@ class ASTStructValue(ASTNode):
     fields: Tuple[ASTStructMember]
     @classmethod
     def from_tree(cls, children):
+        # TODO: check that there are no duplicates field names
         return cls(tuple(children))
 
+
+@dataclass
+class ASTFieldLookup(ASTNode):
+    obj: ASTIdentifier
+    field: ASTIdentifier
+    @classmethod
+    def from_tree(cls, children):
+        obj, field = children
+        return cls(obj, field)
 
 class ASTBuilder(lark.Transformer):
     def __init__(self, visit_tokens: bool = True) -> None:
@@ -279,10 +289,11 @@ class ASTBuilder(lark.Transformer):
     
     struct_member = ASTStructMember.from_tree
     struct_value = ASTStructValue.from_tree
+    field_lookup = ASTFieldLookup.from_tree
 
     expression = ASTExpression.from_tree
     typ = ASTType.from_tree
-    return_typ = ASTReturnType.from_tree
+    ret_typ = ASTReturnType.from_tree
     identifier = ASTIdentifier.from_tree
     number = ASTNumber.from_tree
     prec_1 = ASTBinaryOp.from_tree

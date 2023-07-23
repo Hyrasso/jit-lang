@@ -53,6 +53,8 @@ struct_member: identifier ":" expression
 
 struct_value: "{" _list{struct_member, ","} "}"
 
+field_lookup: identifier "." identifier
+
 expression: prec_1
 
 _list{x, sep} : x (sep x)*
@@ -71,6 +73,7 @@ inline_func_declare: "fn" "(" _list{typed_ident, ","}?  ")" ret_typ? ":" express
      | struct_value
      | inline_func_declare
      | "(" expression ")"
+     | field_lookup
 
 // from lowest to higher precedence
 ?prec_1_op: GT | GTE | LT | LTE | EQ | NEQ

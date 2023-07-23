@@ -6,18 +6,16 @@ Requires gcc to compile jitted code (currently using `gcc (Ubuntu 9.4.0-1ubuntu1
 Usage exemple: `python src/interpreter.py --input-file examples/fibo.jil --jit-compile`
 
 ## TODO
-- allow uninitialized var declaration
-    allows for
-    fibo : fn(int) int
-    fibo = fn(n: int) int:
-        ...
-    instead of everything on the same line
+
 - first class function (check that they can be reassigned and passed as argument and called inside other functions)
-- add struct and array
+    clarify a bit how that works if types only match themselves (is function declaration a value, that can be cast to match the function type?)
+- add struct member lookup (no need for assignment until mutability comes in)
+- add struct to the interpreter
 - do some type checking
-- getc/putc for compilation
-- inline some ast functions
-- how to do modules?
+- add fixed size array (very similar to struct)
+- add slice? (a fat pointer, so a struct with a size + a pointer) (needs to think about where the backing memory comes from, a fixd size array?)
+- read/write for compilation to have print/file read at compile time
+- inline some ast functions during compilation
 
 ## ideas
 
@@ -37,9 +35,16 @@ Usage exemple: `python src/interpreter.py --input-file examples/fibo.jil --jit-c
     ```
     But when its a variable attribute how to define a `ref(mut int)` and not a `mut ref(int)`
 
-- For references how should free be done
+- references
+    what are references, why are they needed
+    references are only allowed to immutable data? when mutating something its necessary to take ownership?
+    how are they 'freed', if they are the memory behind
     - Using a garbage collector / reference counting?
     - Manually?
+
+- memory
+    how to allocate memory with an unknown size at compile time (an array with runtime size, an vector that can grow during runtime)
+    - Box kind of type?
 
 - How to call 'methods' without classes
     - when `f(self: int) int` is defined allow to call it as 1.f(), annoying as the `.` becomes more complicated than just a member access

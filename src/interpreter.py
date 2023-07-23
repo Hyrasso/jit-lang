@@ -16,23 +16,36 @@ SHADOW_JIT = True
 DEBUG = False
 
 BUILTIN_FUNCTIONS = {
-    "/":  lambda a, b: ASTNumber(a.value / b.value),
-    "*":  lambda a, b: ASTNumber(a.value * b.value),
-    "+":  lambda a, b: ASTNumber(a.value + b.value),
-    "-":  lambda a, b: ASTNumber(a.value - b.value),
-    "<":  lambda a, b: ASTNumber(int(a.value < b.value)),
-    "<=": lambda a, b: ASTNumber(int(a.value <= b.value)),
-    ">":  lambda a, b: ASTNumber(int(a.value > b.value)),
-    ">=": lambda a, b: ASTNumber(int(a.value >= b.value)),
-    "==":  lambda a, b: ASTNumber(int(a.value == b.value)),
-    "!=":  lambda a, b: ASTNumber(int(a.value != b.value)),
+    "/":  lambda a, b: type(a)(a.value / b.value),
+    "*":  lambda a, b: type(a)(a.value * b.value),
+    "+":  lambda a, b: type(a)(a.value + b.value),
+    "-":  lambda a, b: type(a)(a.value - b.value),
+    "<":  lambda a, b: type(a)(int(a.value < b.value)),
+    "<=": lambda a, b: type(a)(int(a.value <= b.value)),
+    ">":  lambda a, b: type(a)(int(a.value > b.value)),
+    ">=": lambda a, b: type(a)(int(a.value >= b.value)),
+    "==":  lambda a, b: type(a)(int(a.value == b.value)),
+    "!=":  lambda a, b: type(a)(int(a.value != b.value)),
     "print": lambda *a: print(*a)
+}
+
+class Number:
+    def __init__(self, value) -> None:
+        self.value = value
+
+class U64(Number):
+    def __init__(self, value) -> None:
+        value = value % 2**64
+        super().__init__(value)
+
+BUILTIN_TYPES = {
+    "u64": U64
 }
 
 def run(ast):
 
     # TODO: initalize environment
-    builtin_env = Environment(parent=None, env=BUILTIN_FUNCTIONS)
+    builtin_env = Environment(parent=None, env={**BUILTIN_FUNCTIONS, **BUILTIN_TYPES})
     
     if isinstance(ast, ASTModule):
         interpret_module(ast, builtin_env)
@@ -42,12 +55,15 @@ def run(ast):
 def interpret_module(node: ASTModule, env: Environment):
     interpret_block(node.value, env)
 
-def interpret_block(node: ASTBlock, env: Environment):
+def interpret_block(node: ASTBlock, env: Environment) -> ASTNumber | ASTStructValue | ASTNoReturn:
+    if len(node.value) == 0:
+        raise ValueError("Unexpected empty block")
+    res = ASTNoReturn(None)
     for statement in node.value:
         res = interpret_statement(statement, env)
     return res
 
-def interpret_statement(node: ASTStatement, env: Environment):
+def interpret_statement(node: ASTStatement, env: Environment) -> ASTNumber | ASTStructValue | ASTNoReturn:
     match node.value:
         case ASTExpression(value):
             return interpret_expression(value, env)
@@ -55,10 +71,11 @@ def interpret_statement(node: ASTStatement, env: Environment):
             assert isinstance(lvalue, ASTIdentifier), type(lvalue)
             rvalue = interpret_expression(rvalue, env)
             env.update(lvalue.value, rvalue)
-            return
+            return ASTNoReturn(None)
         case ASTVarDeclaration(var_name, var_type, rvalue):
             assert isinstance(var_name, ASTIdentifier), type(var_name)
-            rvalue = interpret_expression(rvalue, env)
+            if not isinstance(rvalue, ASTUninitValue):
+                rvalue = interpret_expression(rvalue, env)
             # TODO: check that var_type and rvalue match
             # if not isinstance(rvalue, var_type):
             env.set(var_name.value, rvalue)
@@ -81,12 +98,13 @@ def interpret_statement(node: ASTStatement, env: Environment):
             while cond_res.value != 0:
                 interpret_block(block, env)
                 cond_res = interpret_expression(cond, env)
-            return
+            return ASTNoReturn(None)
         case v:
             raise NotImplementedError(f"Interpret statement not implemented for {v}")
+    return ASTNoReturn(None)
 
 
-def interpret_expression(node: ASTExpression | ASTNumber | ASTBinaryOp, env: Environment):
+def interpret_expression(node: ASTExpression | ASTNumber | ASTBinaryOp, env: Environment) -> ASTNumber | ASTStructValue:
     match node:
         case ASTNumber(val):
             return ASTNumber(val)
@@ -97,13 +115,40 @@ def interpret_expression(node: ASTExpression | ASTNumber | ASTBinaryOp, env: Env
             val_b = interpret_expression(b, env)
             val_op = op.value
             op_func = env.get(val_op)
-            return interpret_func_call(op_func, (val_a, val_b), env)
+            f_ret = interpret_func_call(op_func, (val_a, val_b), env)
+            if isinstance(f_ret, ASTNoReturn):
+                raise NotImplementedError()
+            return f_ret
         case ASTFunctionDeclare(_) as func_declare:
             return func_declare
         case ASTFunctionCall(func_name, arguments):
             arg_values = [interpret_expression(arg, env) for arg in arguments]
             func = env.get(func_name.value)
-            return interpret_func_call(func, arg_values, env)
+            f_ret = interpret_func_call(func, arg_values, env)
+            if isinstance(f_ret, ASTNoReturn):
+                raise NotImplementedError()
+            return f_ret
+        case ASTStructValue(fields):
+            interp_fields = list()
+            for field in fields:
+                field_value = interpret_expression(field.value, env)
+                interp_fields.append(ASTStructMember(field.name, field_value))
+            return ASTStructValue(tuple(interp_fields))
+
+        case ASTFieldLookup(obj, field_name):
+            struct = interpret_expression(obj, env)
+            if not isinstance(struct, ASTStructValue):
+                raise RuntimeError(f"Attempting to access field of a {type(obj)}, when a struct was expected")
+            
+            for field in struct.fields:
+                if field.name.value == field_name.value:
+                    if isinstance(field.value, ASTExpression):
+                        raise ValueError("Unevaluated struct field value")
+                    field_value = field.value
+                    break
+            else:
+                raise ValueError(f"Field {field_name} does not exist for struct")
+            return field_value
 
     
     if not isinstance(node, ASTExpression):
@@ -111,7 +156,7 @@ def interpret_expression(node: ASTExpression | ASTNumber | ASTBinaryOp, env: Env
 
     return interpret_expression(node.value, env)
 
-def interpret_func_call(func: Callable | ASTFunctionDeclare, arguments, env: Environment):
+def interpret_func_call(func: Callable | ASTFunctionDeclare, arguments, env: Environment) -> ASTNumber | ASTStructValue | ASTNoReturn:
     if callable(func):
         return func(*arguments)
 
