@@ -9,13 +9,13 @@ Usage exemple: `python src/interpreter.py --input-file examples/fibo.jil --jit-c
 
 - first class function (check that they can be reassigned and passed as argument and called inside other functions)
     clarify a bit how that works if types only match themselves (is function declaration a value, that can be cast to match the function type?)
-- add struct member lookup (no need for assignment until mutability comes in)
-- add struct to the interpreter
+- add location in file to ast nodes for debugging
 - do some type checking
 - add fixed size array (very similar to struct)
 - add slice? (a fat pointer, so a struct with a size + a pointer) (needs to think about where the backing memory comes from, a fixd size array?)
 - read/write for compilation to have print/file read at compile time
 - inline some ast functions during compilation
+- seperate the ASTNodes and the runtime values (-> generate a simple bytecode from the ast)
 
 ## ideas
 
@@ -73,3 +73,9 @@ Usage exemple: `python src/interpreter.py --input-file examples/fibo.jil --jit-c
 - generator
     similar to async, `next` returns an enum (yield type, return type), what is the difference between calling a generator with async or not then? what about the type of a generator, the yield type should be in the function type, or enforce the same type as the return type, and return an enum if we want different types. The issue is that generator are different enough with async function because we cannot just discard the `next()` return values by default, also calling a normal function like a generator do not work -> generator needs to be their own specific objects/types, different than async code. If they are different, should they share the syntax/interface (yield, next?)
     Can generator be implemented using async code? something like passing an inout variable, and inside the generator do `inout_var[] = value_to_yield ; syspend ;` so that after `next()` return we have access to the yielded value from the outside, we could even send values to be read after tye yield resumes in the function. When calling this type of function without async yield are ignored so the value read is the value sent (maybe when we went to read values have a separate `inout_var` to avoid that) so the wrapper should ensure the function is called with (async f()).
+
+- seperate ast from interpretation
+    Would seperate the syntax from the underlying language semantics and runtime values
+    In a first time have a simple pass that generates a bytecode that is equivalent to the AST, with some nodes like astnumber or astfunctiondeclare moved to their runtime values
+    The bytecode can be the flattened AST, represented as a list, with instead of children as fields, children as offsets in the bytecode
+    The interpreter could still have a structure of recursive functions in a first time, but with a current idx being passed around to get the children. The match would still be usable aswell

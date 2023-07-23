@@ -5,7 +5,7 @@ from ast_definition import *
 import logging
 
 from compile import JITEngine, JITValuError
-from utils import Environment
+from utils import Environment, TypedVar
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
@@ -16,30 +16,55 @@ SHADOW_JIT = True
 DEBUG = False
 
 BUILTIN_FUNCTIONS = {
-    "/":  lambda a, b: type(a)(a.value / b.value),
-    "*":  lambda a, b: type(a)(a.value * b.value),
-    "+":  lambda a, b: type(a)(a.value + b.value),
-    "-":  lambda a, b: type(a)(a.value - b.value),
-    "<":  lambda a, b: type(a)(int(a.value < b.value)),
-    "<=": lambda a, b: type(a)(int(a.value <= b.value)),
-    ">":  lambda a, b: type(a)(int(a.value > b.value)),
-    ">=": lambda a, b: type(a)(int(a.value >= b.value)),
-    "==":  lambda a, b: type(a)(int(a.value == b.value)),
-    "!=":  lambda a, b: type(a)(int(a.value != b.value)),
-    "print": lambda *a: print(*a)
+    "/":  TypedVar(lambda a, b: type(a)(a.value / b.value), ASTInferType(None)),
+    "*":  TypedVar(lambda a, b: type(a)(a.value * b.value), ASTInferType(None)),
+    "+":  TypedVar(lambda a, b: type(a)(a.value + b.value), ASTInferType(None)),
+    "-":  TypedVar(lambda a, b: type(a)(a.value - b.value), ASTInferType(None)),
+    "<":  TypedVar(lambda a, b: type(a)(int(a.value < b.value)), ASTInferType(None)),
+    "<=": TypedVar(lambda a, b: type(a)(int(a.value <= b.value)), ASTInferType(None)),
+    ">":  TypedVar(lambda a, b: type(a)(int(a.value > b.value)), ASTInferType(None)),
+    ">=": TypedVar(lambda a, b: type(a)(int(a.value >= b.value)), ASTInferType(None)),
+    "==":  TypedVar(lambda a, b: type(a)(int(a.value == b.value)), ASTInferType(None)),
+    "!=":  TypedVar(lambda a, b: type(a)(int(a.value != b.value)), ASTInferType(None)),
+    "print": TypedVar(lambda *a: print(*a), ASTInferType(None)),
 }
 
 class Number:
     def __init__(self, value) -> None:
+        if isinstance(value, (Number, ASTNumber)):
+            value = value.value
+        elif isinstance(value, int):
+            ...
+        else:
+            raise ValueError(f"Unexpected value {value} for type {type(self)}")
         self.value = value
+    
+    @classmethod
+    def cast(cls, obj):
+        return cls(obj)
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self.value!r})"
 
 class U64(Number):
     def __init__(self, value) -> None:
-        value = value % 2**64
         super().__init__(value)
+        self.value = int(self.value) % 2**64
+    
+
+class Struct:
+    @staticmethod
+    def cast(obj):
+        if not isinstance(obj, ASTStructValue):
+            raise TypeError(f"Unexpected obj of type {obj}, expecting a structure")
+        
+        return ASTStructureType(
+            tuple(ASTTypedIdent(f.ident, f.value) for f in obj.fields)
+        )
 
 BUILTIN_TYPES = {
-    "u64": U64
+    "u64": TypedVar(U64, ASTInferType),
+    "struct": TypedVar(Struct, ASTInferType)
 }
 
 def run(ast):
@@ -69,16 +94,20 @@ def interpret_statement(node: ASTStatement, env: Environment) -> ASTNumber | AST
             return interpret_expression(value, env)
         case ASTAssignment((lvalue, rvalue)):
             assert isinstance(lvalue, ASTIdentifier), type(lvalue)
+            var_typ = env.get_typ(lvalue.value)
             rvalue = interpret_expression(rvalue, env)
+            rvalue = var_typ.cast(rvalue)
             env.update(lvalue.value, rvalue)
             return ASTNoReturn(None)
         case ASTVarDeclaration(var_name, var_type, rvalue):
             assert isinstance(var_name, ASTIdentifier), type(var_name)
+            if isinstance(var_type, ASTInferType):
+                raise NotImplementedError("Type inference not implemented yet")
+            var_type = interpret_typ(var_type, env)
             if not isinstance(rvalue, ASTUninitValue):
                 rvalue = interpret_expression(rvalue, env)
-            # TODO: check that var_type and rvalue match
-            # if not isinstance(rvalue, var_type):
-            env.set(var_name.value, rvalue)
+                rvalue = var_type.cast(rvalue)
+            env.set(var_name.value, rvalue, var_type)
         # case ASTNamedBlock(block_name, block):
         #     return interpret_block(block, env)
         case ASTIfStatement(cond, true_branch, false_branch):
@@ -104,7 +133,36 @@ def interpret_statement(node: ASTStatement, env: Environment) -> ASTNumber | AST
     return ASTNoReturn(None)
 
 
-def interpret_expression(node: ASTExpression | ASTNumber | ASTBinaryOp, env: Environment) -> ASTNumber | ASTStructValue:
+def interpret_typ(node, env: Environment):
+    match node:
+        case ASTUninitValue(_):
+            return node
+        case ASTIdentifier(ident):
+            return env.get(ident)
+        case Number(_):
+            return node
+        case ASTStructureType(fields):
+            interp_fields = []
+            for field in fields:
+                field_typ = interpret_typ(field.ident_type, env)
+                interp_fields.append(ASTTypedIdent(field.ident, field_typ))
+            
+            return ASTStructureType(tuple(interp_fields))
+
+        case ASTType(typ):
+            return interpret_typ(typ, env)
+        case ASTFunctionType(arg_types, ret_type):
+            arguments = []
+            for arg in arg_types:
+                arguments.append(interpret_typ(arg, env))
+            ret = interpret_typ(ret_type, env)
+
+            return ASTFunctionType(tuple(arguments), ret)
+        case _:
+            raise NotImplementedError(f"Interp of type {node} not implemented")
+        
+
+def interpret_expression(node: ASTExpression | ASTNumber | ASTBinaryOp, env: Environment) -> ASTNumber | ASTStructValue | ASTFunctionDeclare:
     match node:
         case ASTNumber(val):
             return ASTNumber(val)
@@ -119,8 +177,17 @@ def interpret_expression(node: ASTExpression | ASTNumber | ASTBinaryOp, env: Env
             if isinstance(f_ret, ASTNoReturn):
                 raise NotImplementedError()
             return f_ret
-        case ASTFunctionDeclare(_) as func_declare:
-            return func_declare
+        case ASTFunctionDeclare(arguments, ret_typ, body):
+            interp_args = []
+            for arg in arguments:
+                ident_typ = interpret_typ(arg.ident_type, env)
+                interp_args.append(ASTTypedIdent(arg.ident, ident_typ))
+            
+            interp_return_typ = interpret_typ(ret_typ, env)
+        
+            # TODO: when astnodes and interpreter values are differnt replace with the internal function value
+            return ASTFunctionDeclare(tuple(interp_args), interp_return_typ, body)
+    
         case ASTFunctionCall(func_name, arguments):
             arg_values = [interpret_expression(arg, env) for arg in arguments]
             func = env.get(func_name.value)
@@ -132,7 +199,7 @@ def interpret_expression(node: ASTExpression | ASTNumber | ASTBinaryOp, env: Env
             interp_fields = list()
             for field in fields:
                 field_value = interpret_expression(field.value, env)
-                interp_fields.append(ASTStructMember(field.name, field_value))
+                interp_fields.append(ASTStructMember(field.ident, field_value))
             return ASTStructValue(tuple(interp_fields))
 
         case ASTFieldLookup(obj, field_name):
@@ -141,7 +208,7 @@ def interpret_expression(node: ASTExpression | ASTNumber | ASTBinaryOp, env: Env
                 raise RuntimeError(f"Attempting to access field of a {type(obj)}, when a struct was expected")
             
             for field in struct.fields:
-                if field.name.value == field_name.value:
+                if field.ident.value == field_name.value:
                     if isinstance(field.value, ASTExpression):
                         raise ValueError("Unevaluated struct field value")
                     field_value = field.value
@@ -203,11 +270,11 @@ def interpret_func_call(func: Callable | ASTFunctionDeclare, arguments, env: Env
 
     if len(func.arguments) != len(arguments):
         raise RuntimeError(f"Wrong number of arguments, got {len(arguments)}, expected {len(func.arguments)}")
-    argument_env = {}
+    new_env = Environment(parent=env)
     for arg_type, call_argument in zip(func.arguments, arguments):
         # TODO: check that the types of the arguments passed to the function match the ones of the function type definition
-        argument_env[arg_type.ident.value] = call_argument
-    new_env = Environment(parent=env, env=argument_env)
+        call_argument = arg_type.ident_type.cast(call_argument)
+        new_env.set(arg_type.ident.value, call_argument, arg_type)
     return interpret_block(func.body, new_env)
 
 

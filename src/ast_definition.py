@@ -117,13 +117,59 @@ class ASTFunctionType(ASTType):
             return_type = ASTNoReturn(None)
 
         return cls(tuple(args), return_type)
+    
+    def cast(self, obj):
+        if not isinstance(obj, ASTFunctionDeclare):
+            raise TypeError(f"Object of type {type(obj)} do not match struct {self}")
+        
+        for arg_typ, decl_arg in zip(self.arguments_type, obj.arguments):
+            if arg_typ != decl_arg.ident_type:
+                raise TypeError(f"Wrong argument type {decl_arg.ident_type}, expected {arg_typ}")
+        if self.return_type != obj.return_type:
+            raise TypeError(f"Wrong return type {self.return_type}, expected {obj.return_type}")
+        
+        return obj
 
 
+@dataclass
 class ASTStructureType(ASTType):
     fields: Tuple[ASTTypedIdent]
     @classmethod
     def from_tree(cls, children):
         return cls(tuple(children))
+    
+    def cast(self, obj):
+        if not isinstance(obj, ASTStructValue):
+            raise TypeError(f"Object of type {type(obj)} do not match struct {self}")
+
+        val_field_names = {f.ident.value for f in obj.fields}
+        typ_field_names = {f.ident.value for f in self.fields}
+        if val_field_names != typ_field_names:
+            raise TypeError(f"Fields do not match"
+                            f"{f' expected {typ_field_names - val_field_names}' if typ_field_names - val_field_names else ''}"
+                            f"{f' unexpected {val_field_names - typ_field_names}' if val_field_names - typ_field_names else ''}")
+        
+        final_fields = []
+        for field in (f.ident for f in self.fields):
+            field_typ, = (f.ident_type for f in self.fields if f.ident.value == field.value)
+            obj_field_value, = (f.value for f in obj.fields if f.ident.value == field.value)
+            final_fields.append(ASTStructMember(field, field_typ.cast(obj_field_value)))
+        
+        return ASTStructValue(tuple(final_fields))
+    
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, ASTStructureType):
+            return False
+        val_field_names = {f.ident.value for f in other.fields}
+        typ_field_names = {f.ident.value for f in self.fields}
+        if val_field_names != typ_field_names:
+            return False
+        for field in (f.ident for f in self.fields):
+            field_typ, = (f.ident_type for f in self.fields if f.ident.value == field.value)
+            other_typ, = (f.ident_type for f in other.fields if f.ident.value == field.value)
+            if field_typ != other_typ:
+                return False
+        return True
 
 
 # kinda weird to have this node that should never existin in the final AST
@@ -195,6 +241,7 @@ class ASTWhileStatement(ASTNode):
         cond, block = children
         return cls(cond, block)
 
+# TODO: have a seperate runtime type for functions
 @dataclass
 class ASTFunctionDeclare(ASTNode):
     arguments: Tuple[ASTTypedIdent]
@@ -228,7 +275,7 @@ class ASTFunctionCall(ASTNode):
 
 @dataclass
 class ASTStructMember(ASTNode):
-    name: ASTIdentifier
+    ident: ASTIdentifier
     value: "ASTExpression | ASTNumber | ASTStructValue"
     @classmethod
     def from_tree(cls, children):

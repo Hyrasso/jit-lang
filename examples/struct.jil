@@ -7,7 +7,7 @@ b : u64 = s.b + 3
 
 s2: {a: u64, b: u64} = {a: s.a, b: s.b * 4}
 
-pair : structure = {left: u64, right: u64}
+pair : struct = {left: u64, right: u64}
 
 p: pair = { left: 1, right: 2 }
 
@@ -15,9 +15,11 @@ f : fn({a: u64, b: u64}) {left: u64, right: u64}
 f = fn(x: {a: u64, b: u64}) {left: u64, right: u64} :
     {left: x.a + 3, right: x.b + 9}
 
-res := f({a: s.a, b: s.b}) 
+
+res : pair = f({a: s.a, b: s.b}) 
 print(res.right)
 print(res.left)
 
-g : = fn(s: {l: u64, r: u64}):
-    pass
+# wait for type inference to work
+# g : = fn(s: {l: u64, r: u64}):
+#     pass
