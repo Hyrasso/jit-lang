@@ -1,6 +1,6 @@
 
-loopn: fn(int)int = fn(stop:int)int:
-    c: int = 0
+loopn: fn(u64)u64 = fn(stop:u64)u64:
+    c: u64 = 0
     while c < stop:
         c = c + 1
     c
@@ -8,7 +8,7 @@ loopn: fn(int)int = fn(stop:int)int:
 print(loopn(10))
 print(loopn(10000))
 
-c: int = 4
+c: u64 = 4
 while c != 0:
     print(c)
     c = c - 1

@@ -6,6 +6,7 @@ import logging
 
 from compile import JITEngine, JITValuError
 from utils import Environment, TypedVar
+from runtime_values import *
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
@@ -15,38 +16,6 @@ JIT_COMPILE = True
 SHADOW_JIT = True
 DEBUG = False
 
-class Number:
-    def __init__(self, value) -> None:
-        if isinstance(value, (Number, ASTNumber)):
-            value = value.value
-        elif isinstance(value, int):
-            ...
-        else:
-            raise ValueError(f"Unexpected value {value} for type {type(self)}")
-        self.value = value
-    
-    @classmethod
-    def cast(cls, obj):
-        return cls(obj)
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({self.value!r})"
-
-class U64(Number):
-    def __init__(self, value) -> None:
-        super().__init__(value)
-        self.value = int(self.value) % 2**64
-    
-
-class Struct:
-    @staticmethod
-    def cast(obj):
-        if not isinstance(obj, ASTStructValue):
-            raise TypeError(f"Unexpected obj of type {obj}, expecting a structure")
-        
-        return ASTStructureType(
-            tuple(ASTTypedIdent(f.ident, f.value) for f in obj.fields)
-        )
 
 # TODO: add type checking to builtin functions
 BUILTIN_FUNCTIONS = {
@@ -113,7 +82,7 @@ def interpret_statement(node: ASTStatement, env: Environment) -> ASTNumber | AST
         #     return interpret_block(block, env)
         case ASTIfStatement(cond, true_branch, false_branch):
             cond_res = interpret_expression(cond, env)
-            if not isinstance(cond_res, ASTNumber):
+            if not isinstance(cond_res, Number):
                 raise NotImplementedError(f"If condition only implemented for number values, not {type(cond_res)}")
             block_env = Environment(parent=env)
             if cond_res.value != 0:
@@ -123,7 +92,7 @@ def interpret_statement(node: ASTStatement, env: Environment) -> ASTNumber | AST
                 return interpret_block(false_branch, block_env)
         case ASTWhileStatement(cond, block):
             cond_res = interpret_expression(cond, env)
-            if not isinstance(cond_res, ASTNumber):
+            if not isinstance(cond_res, Number):
                 raise NotImplementedError(f"While condition should resolve to a number, not {cond_res}")
             while cond_res.value != 0:
                 interpret_block(block, env)
@@ -165,10 +134,10 @@ def interpret_typ(node, env: Environment):
             raise NotImplementedError(f"Interp of type {node} not implemented")
         
 
-def interpret_expression(node: ASTExpression | ASTNumber | ASTBinaryOp, env: Environment) -> ASTNumber | ASTStructValue | ASTFunctionDeclare | ASTNoReturn:
+def interpret_expression(node: ASTExpression | ASTNumber | ASTBinaryOp, env: Environment) -> Number | ASTStructValue | ASTFunctionDeclare | ASTNoReturn:
     match node:
         case ASTNumber(val):
-            return ASTNumber(val)
+            return Number(val)
         case ASTIdentifier(ident):
             return env.get(ident)
         case ASTBinaryOp(a, op, b):
@@ -226,13 +195,13 @@ def interpret_expression(node: ASTExpression | ASTNumber | ASTBinaryOp, env: Env
 
     return interpret_expression(node.value, env)
 
-def interpret_func_call(func: Callable | ASTFunctionDeclare, arguments, env: Environment) -> ASTNumber | ASTStructValue | ASTNoReturn:
+def interpret_func_call(func: Callable | ASTFunctionDeclare, arguments, env: Environment, force_inteprret=False) -> ASTNumber | ASTStructValue | ASTNoReturn:
     if callable(func):
         return func(*arguments)
 
     assert isinstance(func, ASTFunctionDeclare), type(func)
 
-    if JIT_COMPILE and func.jit_function_call is None:
+    if not force_inteprret and JIT_COMPILE and func.jit_function_call is None:
         try:
             t = time.perf_counter_ns()
             JIT_ENGINE.compile_function(func, env)
@@ -244,15 +213,10 @@ def interpret_func_call(func: Callable | ASTFunctionDeclare, arguments, env: Env
             else:
                 logger.error(err, exc_info=True)
 
-    if func.jit_function_call is not None:
+    if not force_inteprret and func.jit_function_call is not None:
         if SHADOW_JIT:
-            argument_env = {}
-            for arg_type, call_argument in zip(func.arguments, arguments):
-                # TODO: check that the types of the arguments passed to the function match the ones of the function type definition
-                argument_env[arg_type.ident.value] = call_argument
-            new_env = Environment(parent=env, env=argument_env)
             t = time.perf_counter_ns()
-            interp_res = interpret_block(func.body, new_env)
+            interp_res = interpret_func_call(func, arguments, env, force_inteprret=True)
             dt = time.perf_counter_ns() - t
             logger.info("Intepreted func in %d ns", dt)
             try:

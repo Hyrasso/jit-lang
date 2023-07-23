@@ -1,6 +1,6 @@
 
-fibo: fn(int)int = fn(n:int)int:
-    res:int = 0
+fibo: fn(u64)u64 = fn(n:u64)u64:
+    res:u64 = 0
     if n == 0:
         res = 0
     else:
@@ -8,9 +8,9 @@ fibo: fn(int)int = fn(n:int)int:
             res = 1
         else:
             n = n - 2
-            a: int = 1
+            a: u64 = 1
             res = 1
-            tmp: int = 0
+            tmp: u64 = 0
             # print(n)
             while n != 0:
                 tmp = a

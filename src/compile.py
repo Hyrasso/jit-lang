@@ -11,6 +11,7 @@ from textwrap import indent
 from utils import Environment
 from ast_definition import ASTFunctionDeclare
 from jit_builtins import BUILTIN_FUNC_ASM
+from runtime_values import Number, U64
 
 class JITValuError(ValueError):...
 
@@ -38,27 +39,31 @@ def systemv_call_order(sizes):
 
 def to_c_type(arg):
     match arg:
-        case ASTNumber(val):
+        case U64(val):
+            return ctypes.c_uint64(val)
+        case Number(val):
             return ctypes.c_int64(val)
         case a:
             raise NotImplementedError(f"Conversion to ctypes not implemented for {a}")
 
 class JITFunctionCall:
-    def __init__(self, function_label, function_args, jit_engine) -> None:
+    def __init__(self, function_label, function_args, function_ret_type, jit_engine) -> None:
         self.jit_engine = jit_engine
         self.function_args = function_args
         self.function_label = function_label
+        self.func_ret_type = function_ret_type
     
     def __call__(self, *args) -> Any:
         assert len(args) == len(self.function_args)
         compiled_func = self.jit_engine.jitted_lib[f"{self.function_label}"]
+        # TODO: add a typ_to_c_type, and val_to_ctype that does typ_to_c_type(typ(val))(val)
         compiled_func.argtypes = [ctypes.c_int64] * len(self.function_args)
         compiled_func.restype = ctypes.c_int64
 
         ctype_args = [to_c_type(arg) for arg in args]
         res = compiled_func(*ctype_args)
 
-        return ASTNumber(res)
+        return self.func_ret_type(res)
 
 
 class JITEngine:
@@ -87,7 +92,8 @@ class JITEngine:
         self._compiled_functions.append(str(ctx))
 
         func_args = func.arguments
-        compiled_func = JITFunctionCall(compiled_function_label, func_args, self)
+        func_ret_type = func.return_type
+        compiled_func = JITFunctionCall(compiled_function_label, func_args, func_ret_type, self)
         func.jit_function_call = compiled_func
 
         self.reload()
@@ -247,15 +253,14 @@ def compile_function(func: ASTFunctionDeclare, env, compilation_context: Compila
     # move arguments to the expected places
     compilation_context.emit_grow_stack(8 * len(func.arguments))
     current_size = compilation_context.stack_size
-    func_env = {}
+    # set arguments
+    func_env = Environment(parent=env, env=None)
     for idx, (addr, arg) in enumerate(zip(systemv_call_order([8] * len(func.arguments)), func.arguments)):
         dest = StackOffset(-(current_size - idx * 8))
         compilation_context.emit_move(source=addr, destination=dest)
-        func_env[arg.ident.value] = dest
+        func_env.set(arg.ident.value, dest, None)
 
 
-    # set arguments
-    func_env = Environment(parent=env, env=func_env)
     compile_block(func.body, func_env, compilation_context)
 
     compilation_context.emit_epilogue()
@@ -381,7 +386,7 @@ def compile_var_declaration(lvalue, var_type, rvalue, env: Environment, compilat
             # add some space on the stack for the new variable
             compilation_context.emit_grow_stack(8)
             var_addr = StackOffset(-compilation_context.stack_size)
-            env.set(lvalue.value, var_addr)
+            env.set(lvalue.value, var_addr, None) # TODO: do not ignore type
             compile_expression(exp, env, compilation_context)
             compilation_context.emit_move(source=Register.RAX, destination=var_addr)
 
