@@ -39,10 +39,12 @@ BUILTIN_TYPES = {
     "struct": TypedVar(Struct(), ASTInferType)
 }
 
+def build_builtin_env():
+    return Environment(parent=None, env={**BUILTIN_FUNCTIONS, **BUILTIN_TYPES})
+
 def run(ast):
 
-    # TODO: initalize environment
-    builtin_env = Environment(parent=None, env={**BUILTIN_FUNCTIONS, **BUILTIN_TYPES})
+    builtin_env = build_builtin_env()
     
     if isinstance(ast, ASTModule):
         interpret_module(ast, builtin_env)
