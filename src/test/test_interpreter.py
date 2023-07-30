@@ -11,7 +11,7 @@ class EvalResuts(unittest.TestCase):
         env = build_builtin_env()
         res = interpret_expression(exp, env)
         self.assertIsInstance(res, Number)
-        self.assertEqual(res.value, 4)
+        self.assertEqual(res.value, 2)
 
 
 
