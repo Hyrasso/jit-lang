@@ -91,6 +91,14 @@ class ASTAssignment(ASTNode):
 class ASTType(ASTNullary):
     ...
 
+class ASTMut(ASTNullary):
+    def cast(self, obj):
+        if isinstance(obj, ASTMut):
+            return self.value.cast(obj.value)
+
+        return self.value.cast(obj)
+
+
 class ASTReturnType(ASTType):
     ...
 
@@ -343,6 +351,7 @@ class ASTBuilder(lark.Transformer):
 
     expression = ASTExpression.from_tree
     typ = ASTType.from_tree
+    mut_typ = ASTMut.from_tree
     ret_typ = ASTReturnType.from_tree
     identifier = ASTIdentifier.from_tree
     number = ASTNumber.from_tree

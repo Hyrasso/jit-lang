@@ -20,6 +20,7 @@ while_statement: "while" expression ":" _NEW_LINE _INDENT block _DEDENT
 typ: identifier
    | function_type
    | struct_type
+   | "Mut" "(" typ ")" -> mut_typ
     // | expression
 
 typed_ident: identifier ":" typ

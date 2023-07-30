@@ -36,8 +36,8 @@ if __name__ == "__main__":
     else:
         while (cmd := input("> ")):
             try:
-                res = parser.parse(cmd)
-                print(res.pretty())
+                res = parser.parse(f"{cmd}\n")
+                print(res)
             except lark.LarkError as err:
                 print(repr(err))
                 print(err)

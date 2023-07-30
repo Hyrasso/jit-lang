@@ -1,0 +1,22 @@
+a: u64 = 1
+# error
+# a = 2
+
+a: u64
+# ok
+a = 1
+print(a)
+
+a: Mut(u64) = 1
+# ok
+a = 2
+print(a)
+
+s : {val: u64} = {val: 1}
+# error
+# s = {val: 3}
+
+s : Mut({val: u64}) = {val: 1}
+# ok
+s = {val: 3}
+print(s.val)

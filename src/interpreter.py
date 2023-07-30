@@ -1,12 +1,12 @@
 import time
 from typing import Callable
-from ast_definition import *
-
 import logging
 
-from compile import JITEngine, JITValuError
-from utils import Environment, TypedVar
-from runtime_values import *
+
+from src.ast_definition import *
+from src.compile import JITEngine, JITValuError
+from src.utils import Environment, TypedVar
+from src.runtime_values import *
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
@@ -30,11 +30,13 @@ BUILTIN_FUNCTIONS = {
     "==":  TypedVar(lambda a, b: type(a)(int(a.value == b.value)), ASTInferType(None)),
     "!=":  TypedVar(lambda a, b: type(a)(int(a.value != b.value)), ASTInferType(None)),
     "print": TypedVar(lambda *a: print(*a), ASTInferType(None)),
+    "pdb": TypedVar(lambda: pdb.set_trace(), ASTInferType(None)),
 }
 
+# types are instances of the values because it makes some things easier for now, TOFIX quickly
 BUILTIN_TYPES = {
-    "u64": TypedVar(U64, ASTInferType),
-    "struct": TypedVar(Struct, ASTInferType)
+    "u64": TypedVar(U64(0), ASTInferType),
+    "struct": TypedVar(Struct(), ASTInferType)
 }
 
 def run(ast):
@@ -58,6 +60,20 @@ def interpret_block(node: ASTBlock, env: Environment) -> ASTNumber | ASTStructVa
         res = interpret_statement(statement, env)
     return res
 
+def is_mutable(typ):
+
+    match typ:
+        case ASTMut():
+            return True
+        case ASTType(inner):
+            return is_mutable(inner)
+        case ASTStructureType():
+            return False
+        case InternalObject():
+            return typ.is_mutable
+        case _:
+            raise NotImplementedError(f"Checking mutability not implemented for {typ}")
+
 def interpret_statement(node: ASTStatement, env: Environment) -> ASTNumber | ASTStructValue | ASTNoReturn:
     match node.value:
         case ASTExpression(value):
@@ -66,7 +82,9 @@ def interpret_statement(node: ASTStatement, env: Environment) -> ASTNumber | AST
             if not isinstance(lvalue, ASTIdentifier):
                 raise NotImplementedError(f"Assignement to {type(lvalue)} is not implemented")
             var_typ = env.get_typ(lvalue.value)
-            # TODO: check that the type is mutable
+            # check that the type is mutable, or not initialized yet
+            if not isinstance(env.get(lvalue.value), ASTUninitValue) and not is_mutable(var_typ):
+                raise ValueError(f"Trying to assign to an immutable value {lvalue} with immutable type {type(var_typ)}, consider adding Mut")
             rvalue = interpret_expression(rvalue, env)
             rvalue = var_typ.cast(rvalue)
             env.update(lvalue.value, rvalue)
@@ -125,6 +143,8 @@ def interpret_typ(node, env: Environment):
 
         case ASTType(typ):
             return interpret_typ(typ, env)
+        case ASTMut(typ):
+            return ASTMut(interpret_typ(typ, env))
         case ASTFunctionType(arg_types, ret_type):
             arguments = []
             for arg in arg_types:
@@ -243,7 +263,7 @@ def interpret_func_call(func: Callable | ASTFunctionDeclare, arguments, env: Env
     for arg_type, call_argument in zip(func.arguments, arguments):
         # TODO: check that the types of the arguments passed to the function match the ones of the function type definition
         call_argument = arg_type.ident_type.cast(call_argument)
-        new_env.set(arg_type.ident.value, call_argument, arg_type)
+        new_env.set(arg_type.ident.value, call_argument, arg_type.ident_type)
     res = interpret_block(func.body, new_env)
     return func.return_type.cast(res)
 
@@ -251,13 +271,17 @@ def interpret_func_call(func: Callable | ASTFunctionDeclare, arguments, env: Env
 if __name__ == "__main__":
     import argparse
     from pathlib import Path
+    import sys
+    import pdb
+    import traceback
 
-    from lark_parser import initialize_parser
+    from src.lark_parser import initialize_parser
 
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("--input-file", type=Path, required=True)
     arg_parser.add_argument("--grammar-definition", default=Path(__file__).absolute().parent / "grammar.lark")
     arg_parser.add_argument("--jit-compile", action="store_true")
+    arg_parser.add_argument("--debug", action="store_true")
 
     args = arg_parser.parse_args()
 
@@ -268,4 +292,12 @@ if __name__ == "__main__":
 
     res = parser.parse(Path(args.input_file).read_text())
 
-    run(res)
+    try:
+        run(res)
+    except Exception:
+        if args.debug:
+            extype, value, tb = sys.exc_info()
+            traceback.print_exc()
+            pdb.post_mortem(tb)
+        else:
+            raise

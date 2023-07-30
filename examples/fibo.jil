@@ -1,6 +1,7 @@
 
 fibo: fn(u64)u64 = fn(n:u64)u64:
-    res:u64 = 0
+    n: Mut(u64) = n
+    res: Mut(u64) = 0
     if n == 0:
         res = 0
     else:
@@ -8,12 +9,11 @@ fibo: fn(u64)u64 = fn(n:u64)u64:
             res = 1
         else:
             n = n - 2
-            a: u64 = 1
+            a: Mut(u64) = 1
             res = 1
-            tmp: u64 = 0
             # print(n)
             while n != 0:
-                tmp = a
+                tmp: u64 = a
                 a = res
                 res = tmp + res
                 n = n - 1

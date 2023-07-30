@@ -26,7 +26,7 @@ class Environment:
             return self._env[val].typ
         
         if self.parent is not None:
-            return self.parent.get(val)
+            return self.parent.get_typ(val)
         
         raise RuntimeError(f"Unknown {val} in env")
 
@@ -42,5 +42,7 @@ class Environment:
     # systematicaly shadow parent env
     def set(self, var, val, typ):
         # also shadow var in the same environement, the shadowed var is not accessible anymore after this
+        if val is None:
+            raise ValueError(f"Unexpected None")
         self._env[var] = TypedVar(val, typ)
 

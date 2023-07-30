@@ -1,5 +1,4 @@
 from typing import Any
-from ast_definition import *
 from collections import Counter
 import ctypes
 from ctypes import CDLL
@@ -8,10 +7,10 @@ from pathlib import Path
 import subprocess
 from textwrap import indent
 
-from utils import Environment
-from ast_definition import ASTFunctionDeclare
-from jit_builtins import BUILTIN_FUNC_ASM
-from runtime_values import Number, U64
+from src.utils import Environment
+from src.ast_definition import *
+from src.jit_builtins import BUILTIN_FUNC_ASM
+from src.runtime_values import Number, U64
 
 class JITValuError(ValueError):...
 
@@ -39,8 +38,8 @@ def systemv_call_order(sizes):
 
 def to_c_type(arg):
     match arg:
-        case U64(val):
-            return ctypes.c_uint64(val)
+        # case U64(val):
+        #     return ctypes.c_uint64(val)
         case Number(val):
             return ctypes.c_int64(val)
         case a:
@@ -63,7 +62,7 @@ class JITFunctionCall:
         ctype_args = [to_c_type(arg) for arg in args]
         res = compiled_func(*ctype_args)
 
-        return self.func_ret_type(res)
+        return type(self.func_ret_type)(res)
 
 
 class JITEngine:
@@ -372,8 +371,14 @@ def compile_expression(exp, env, compilation_context: CompilationContext):
             raise NotImplementedError(f"Compilation of {type(o)} not implemented yet")
 
 def compile_var_declaration(lvalue, var_type, rvalue, env: Environment, compilation_context: CompilationContext):
-    if not isinstance(var_type.value, ASTIdentifier) and not var_type.value.value == "int":
+    if isinstance(var_type, ASTFunctionType):
+        raise NotImplementedError(f"Compiling inner functions is not supported yet")
+    if not isinstance(var_type.value, ASTIdentifier):
+        if isinstance(var_type.value, ASTType):
+            return compile_var_declaration(lvalue, var_type.value, rvalue, env, compilation_context)
         raise NotImplementedError(f"Compiling variablle declaration of type {var_type.value} is not implemented")
+    if not var_type.value.value == "u64":
+        raise NotImplementedError(f"Compiling variablle of type {var_type.value} is not implemented")
     if not isinstance(lvalue, ASTIdentifier):
         raise NotImplementedError(f"Assigning to anything else than an identifier is not supported yet (found: {type(lvalue)})")
     match rvalue:
@@ -383,11 +388,12 @@ def compile_var_declaration(lvalue, var_type, rvalue, env: Environment, compilat
             # should be called from jit engine
             compile_function(func_dec, env, compilation_context)
         case ASTExpression(exp):
+            # results is in rax because only qword are implemented, but it could not be the case later
+            compile_expression(exp, env, compilation_context)
             # add some space on the stack for the new variable
             compilation_context.emit_grow_stack(8)
             var_addr = StackOffset(-compilation_context.stack_size)
             env.set(lvalue.value, var_addr, None) # TODO: do not ignore type
-            compile_expression(exp, env, compilation_context)
             compilation_context.emit_move(source=Register.RAX, destination=var_addr)
 
 def compile_var_assignement(lvalue, rvalue, env, compilation_context: CompilationContext):

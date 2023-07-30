@@ -1,6 +1,12 @@
-from ast_definition import ASTNumber, ASTStructValue, ASTStructureType, ASTTypedIdent
+from abc import ABC, abstractclassmethod
+from src.ast_definition import ASTNumber, ASTStructValue, ASTStructureType, ASTTypedIdent
 
-class Number:
+class InternalObject(ABC):
+    is_mutable = False
+    @abstractclassmethod
+    def cast(cls, obj):...
+
+class Number(InternalObject):
     __match_args__ = ("value",)
     def __init__(self, value) -> None:
         if isinstance(value, (Number, ASTNumber)):
@@ -27,11 +33,13 @@ class Number:
 
 class U64(Number):
     def __init__(self, value) -> None:
+        if isinstance(value, float):
+            value = int(value)
         super().__init__(value)
         self.value = int(self.value) % 2**64
     
 
-class Struct:
+class Struct(InternalObject):
     @staticmethod
     def cast(obj):
         if not isinstance(obj, ASTStructValue):

@@ -37,6 +37,16 @@ class Parseing(unittest.TestCase):
                 self.assertIsInstance(exp.value, ASTNumber)
                 num = exp.value
                 self.assertEqual(num.value, val)
+    
+    def test_mut(self):
+        ast: ASTModule = self.parser.parse("ident: Mut(u64)\n")
+        stmt = self.unpack_single_statement(ast)
+        self.assertIsInstance(stmt.value, ASTVarDeclaration)
+        # Not entirely sure this is the best structure
+        self.assertIsInstance(stmt.value.var_type, ASTMut)
+        self.assertIsInstance(stmt.value.var_type.value, ASTType)
+        self.assertIsInstance(stmt.value.var_type.value.value, ASTIdentifier)
+
 
 
 if __name__ == "__main__":
