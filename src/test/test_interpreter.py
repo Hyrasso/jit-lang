@@ -14,7 +14,5 @@ class EvalResuts(unittest.TestCase):
         self.assertEqual(res.value, 2)
 
 
-
-
 if __name__ == "__main__":
     unittest.main()

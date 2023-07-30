@@ -7,13 +7,12 @@ Usage exemple: `python -m src.interpreter --input-file examples/fibo.jil --jit-c
 
 ## TODO
 
-- implement mut/immutable
-- implement type inference
-- implement nominal typing matching
-- first class function (check that they can be reassigned and passed as argument and called inside other functions)
-    clarify a bit how that works if types only match themselves (is function declaration a value, that can be cast to match the function type?)
+- implementation of mut/immutable done (partially, there might be some errors) in the interpreter, not in the compiler
+- implement basic type inference
+- implement nominal type matching
+    clarify a bit how that works if types only match themselves (is function declaration a value, that can be cast to match the function type?), for first class functions anonymous gets cast ok, but other would not match, unless the argument also gives the expected type explicitely
+    Make function structural (only for number of arguments?) there might be something interesting to dig here, is the only annoying thing to pass functions as argument the number of arguments of the function type? Should a lib expose the function types that are expected so the caller is able to pass them as argument?
 - add location in file to ast nodes for debugging
-- ensure type checking works as expected for functions
 - add fixed size array (very similar to struct in semantics)
 - fix end of line comments (currently `1 + 1 # comment` breaks the parsing)
 - add slice? (a fat pointer, so a struct with a size + a pointer) (needs to think about where the backing memory comes from, a fixd size array?), whats the differences with fixed sized array if in contains also the size?
