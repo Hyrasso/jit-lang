@@ -195,13 +195,13 @@ def interpret_expression(node: ASTExpression | ASTNumber | ASTBinaryOp, env: Env
 
     return interpret_expression(node.value, env)
 
-def interpret_func_call(func: Callable | ASTFunctionDeclare, arguments, env: Environment, force_inteprret=False) -> ASTNumber | ASTStructValue | ASTNoReturn:
+def interpret_func_call(func: Callable | ASTFunctionDeclare, arguments, env: Environment, force_intepret=False) -> ASTNumber | ASTStructValue | ASTNoReturn:
     if callable(func):
         return func(*arguments)
 
     assert isinstance(func, ASTFunctionDeclare), type(func)
 
-    if not force_inteprret and JIT_COMPILE and func.jit_function_call is None:
+    if not force_intepret and JIT_COMPILE and func.jit_function_call is None:
         try:
             t = time.perf_counter_ns()
             JIT_ENGINE.compile_function(func, env)
@@ -213,10 +213,10 @@ def interpret_func_call(func: Callable | ASTFunctionDeclare, arguments, env: Env
             else:
                 logger.error(err, exc_info=True)
 
-    if not force_inteprret and func.jit_function_call is not None:
+    if not force_intepret and func.jit_function_call is not None:
         if SHADOW_JIT:
             t = time.perf_counter_ns()
-            interp_res = interpret_func_call(func, arguments, env, force_inteprret=True)
+            interp_res = interpret_func_call(func, arguments, env, force_intepret=True)
             dt = time.perf_counter_ns() - t
             logger.info("Intepreted func in %d ns", dt)
             try:

@@ -21,7 +21,7 @@ Usage exemple: `python src/interpreter.py --input-file examples/fibo.jil --jit-c
 
 ## ideas
 
-- types are only equal with themselves, so when defining a function `f: () {a: u64} = () {a: u64}` would raise an error.
+- types are only equal with themselves (nomincal typing, as opposed to structural sypting), so when defining a function `f: () {a: u64} = () {a: u64}` would raise an error.
 
 - Should mutability be linked to the variable/the name, or with the type itself?
     When linked with the type it is weird with struct, eg it allows for inner mutability of an immutable variable
@@ -41,6 +41,7 @@ Usage exemple: `python src/interpreter.py --input-file examples/fibo.jil --jit-c
     what are references, why are they needed
     references are only allowed to immutable data? when mutating something its necessary to take ownership?
     how are they 'freed', if they are the memory behind
+    Do not use [] for references, as we the semantics should be clearly seperated from arrays ones. & or * are fine if a specific operator is needed.
     - Using a garbage collector / reference counting?
     - Manually?
 
