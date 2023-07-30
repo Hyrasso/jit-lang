@@ -7,17 +7,19 @@ Usage exemple: `python src/interpreter.py --input-file examples/fibo.jil --jit-c
 
 ## TODO
 
+- implement mut/immutable
+- implement type inference
+- implement nominal typing matching
 - first class function (check that they can be reassigned and passed as argument and called inside other functions)
     clarify a bit how that works if types only match themselves (is function declaration a value, that can be cast to match the function type?)
 - add location in file to ast nodes for debugging
 - ensure type checking works as expected for functions
-- implement that types are not compared structurally, but only if they are exactly the same (casting should happend only on assignment from literal, the rest of the time the types should match exactly)
-- add fixed size array (very similar to struct)
+- add fixed size array (very similar to struct in semantics)
 - fix end of line comments (currently `1 + 1 # comment` breaks the parsing)
-- add slice? (a fat pointer, so a struct with a size + a pointer) (needs to think about where the backing memory comes from, a fixd size array?)
+- add slice? (a fat pointer, so a struct with a size + a pointer) (needs to think about where the backing memory comes from, a fixd size array?), whats the differences with fixed sized array if in contains also the size?
 - read/write for compilation to have print/file read at compile time
 - inline some ast functions during compilation
-- seperate the ASTNodes and the runtime values (-> generate a simple bytecode from the ast)
+- seperate the ASTNodes and the runtime values (-> generate a simple bytecode from the ast by flattening it)
 
 ## ideas
 

@@ -23,3 +23,8 @@ print(res.left)
 # wait for type inference to work
 # g : = fn(s: {l: u64, r: u64}):
 #     pass
+
+# nested structs
+
+outer_s : {p: {left: u64, right: u64}, c: u64} = {p: {left: 0, right: 42}, c: 4}
+print(outer_s.p.right)

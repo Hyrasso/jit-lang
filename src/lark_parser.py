@@ -3,10 +3,10 @@ from pathlib import Path
 
 import lark
 
-from ast_definition import ASTBuilder, BlockIndenter
+from src.ast_definition import ASTBuilder, BlockIndenter
 
 
-def initialize_parser(grammar_file=Path):
+def initialize_parser(grammar_file: Path):
     ast_builder = ASTBuilder()
     parser = lark.Lark.open(
         str(grammar_file),

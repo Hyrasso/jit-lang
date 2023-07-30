@@ -63,8 +63,10 @@ def interpret_statement(node: ASTStatement, env: Environment) -> ASTNumber | AST
         case ASTExpression(value):
             return interpret_expression(value, env)
         case ASTAssignment((lvalue, rvalue)):
-            assert isinstance(lvalue, ASTIdentifier), type(lvalue)
+            if not isinstance(lvalue, ASTIdentifier):
+                raise NotImplementedError(f"Assignement to {type(lvalue)} is not implemented")
             var_typ = env.get_typ(lvalue.value)
+            # TODO: check that the type is mutable
             rvalue = interpret_expression(rvalue, env)
             rvalue = var_typ.cast(rvalue)
             env.update(lvalue.value, rvalue)

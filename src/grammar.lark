@@ -54,6 +54,7 @@ struct_member: identifier ":" expression
 struct_value: "{" _list{struct_member, ","} "}"
 
 field_lookup: identifier "." identifier
+            | field_lookup "." identifier
 
 expression: prec_1
 

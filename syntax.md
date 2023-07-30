@@ -51,9 +51,8 @@ No for loop for now
     # to create mutable variables/objects
     Mut
 
-    # to create references
-    Ref
-    
+maybe, not sure of the semantics, or utility, for now: Ref to create references
+
 
 # Structs
 
